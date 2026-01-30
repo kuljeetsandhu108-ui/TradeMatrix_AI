@@ -1,13 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from database import engine
+from sqlalchemy.orm import Session
+from database import engine, SessionLocal
 import models
 
 # --- IMPORT ROUTERS ---
 from routers import strategy, broker, execution
 
 # 1. Initialize Database Tables
-# This creates the tables in your Railway PostgreSQL automatically
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -16,9 +16,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# 2. CORS CONFIGURATION (Crucial Fix)
-# We set allow_origins to ["*"] to allow connections from ANY frontend domain.
-# This fixes the "Deployment Failed" error caused by domain mismatches on Railway.
+# 2. CORS CONFIGURATION
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -26,6 +24,30 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 3. AUTO-CREATE TEST USER (The Fix for 500 Error)
+def create_default_user():
+    db = SessionLocal()
+    try:
+        # Check if User 1 exists
+        user = db.query(models.User).filter(models.User.id == 1).first()
+        if not user:
+            print("⚠️ User 1 not found. Creating Default Admin User...")
+            default_user = models.User(
+                email="admin@tradematrix.com",
+                full_name="Admin Trader",
+                is_active=True
+            )
+            db.add(default_user)
+            db.commit()
+            print("✅ Default User Created.")
+    except Exception as e:
+        print(f"Error creating default user: {e}")
+    finally:
+        db.close()
+
+# Run this on startup
+create_default_user()
 
 @app.get("/")
 async def root():
@@ -35,8 +57,7 @@ async def root():
         "mode": "Live-Cloud"
     }
 
-# 3. REGISTER ROUTERS
-# This connects all your logic modules to the main app
+# 4. REGISTER ROUTERS
 app.include_router(strategy.router)
 app.include_router(broker.router)
 app.include_router(execution.router)
