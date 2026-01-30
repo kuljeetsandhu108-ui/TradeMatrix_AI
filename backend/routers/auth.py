@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from database import get_db
 from pydantic import BaseModel
@@ -14,35 +15,64 @@ router = APIRouter(
     tags=["auth"]
 )
 
-# SETTINGS
+# --- SETTINGS ---
 SECRET_KEY = "super_secret_high_end_key"
 ALGORITHM = "HS256"
-# You can optionally enforce the Client ID check on backend too
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID") 
 
+# Define where to look for the token (needed for the dependency)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# --- LOGIN REQUEST SCHEMA ---
 class GoogleLoginRequest(BaseModel):
     token: str
 
+# --- THE SECURITY DEPENDENCY (Moved Here) ---
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """
+    Decodes the JWT Token and finds the User.
+    Other routers will use this to protect endpoints.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    
+    try:
+        # Decode Token
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+    except jwt.PyJWTError:
+        raise credentials_exception
+    
+    # Get User from DB
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if user is None:
+        raise credentials_exception
+        
+    return user
+
+# --- GOOGLE LOGIN ENDPOINT ---
 @router.post("/google")
 def google_login(data: GoogleLoginRequest, db: Session = Depends(get_db)):
-    print(f"Received Google Token (First 50 chars): {data.token[:50]}...") # Debug Log
+    print(f"Received Google Token (First 50 chars): {data.token[:50]}...") 
 
     try:
-        # 1. Verify the Token with Google
+        # 1. Verify Google Token
+        # Increased clock skew to 60s to fix time sync issues
         id_info = id_token.verify_oauth2_token(data.token, requests.Request(), clock_skew_in_seconds=60)
 
-
-        # 2. Extract Info
         email = id_info.get("email")
         name = id_info.get("name")
         picture = id_info.get("picture")
         
-        print(f"✅ Google Verified: {email}") # Debug Log
-
         if not email:
             raise HTTPException(status_code=400, detail="Google Token valid but no email found")
 
-        # 3. Check/Create User in Database
+        # 2. Check/Create User
         user = db.query(models.User).filter(models.User.email == email).first()
 
         if not user:
@@ -56,10 +86,8 @@ def google_login(data: GoogleLoginRequest, db: Session = Depends(get_db)):
             db.add(user)
             db.commit()
             db.refresh(user)
-        else:
-            print(f"👋 Welcome back User ID: {user.id}")
         
-        # 4. Create Session Token (JWT)
+        # 3. Create Session Token (JWT)
         payload = {
             "sub": str(user.id),
             "email": user.email,
@@ -78,7 +106,6 @@ def google_login(data: GoogleLoginRequest, db: Session = Depends(get_db)):
         }
 
     except ValueError as e:
-        # This prints the EXACT reason Google rejected it to your Terminal
         print(f"❌ Google Token Verification Error: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Invalid Google Token: {str(e)}")
     except Exception as e:
