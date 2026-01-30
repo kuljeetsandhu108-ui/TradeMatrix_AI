@@ -1,0 +1,13 @@
+# Python
+backend/venv/
+backend/__pycache__/
+*.pyc
+backend/.env
+backend/tradematrix.db
+
+# Frontend / Node
+frontend/node_modules/
+frontend/.next/
+frontend/.env
+frontend/out/
+.DS_Store
