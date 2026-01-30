@@ -7,7 +7,6 @@ from routers import strategy, broker, execution, auth # <--- Import Auth
 
 # --- IMPORT ROUTERS ---
 from routers import strategy, broker, execution
-from routers import strategy, broker, execution, auth  # <--- MAKE SURE 'auth' IS HERE
 
 
 # 1. Initialize Database Tables

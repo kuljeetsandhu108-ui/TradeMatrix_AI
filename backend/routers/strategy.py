@@ -3,8 +3,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 import models, schemas
 from typing import List
-from dependencies import get_current_user # <--- IMPORT THE SECURITY DEPENDENCY
-
+from ..dependencies import get_current_user
 router = APIRouter(
     prefix="/api/v1/strategy",
     tags=["strategies"]
