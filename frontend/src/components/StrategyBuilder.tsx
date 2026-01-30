@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { X, Plus, Save, Trash2, PlayCircle, Activity, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
-import axios from "axios";
+import api from "../utils/api"; // <--- CHANGED: Using our smart API helper instead of axios
 
 // --- Types for Type Safety ---
 interface BuilderProps {
@@ -52,7 +52,7 @@ export default function StrategyBuilder({ onClose }: BuilderProps) {
     ));
   };
 
-  // 4. SAVE & DEPLOY TO BACKEND (Cloud Aware)
+  // 4. SAVE & DEPLOY TO BACKEND (Authenticated)
   const handleSave = async () => {
     // Basic Validation
     if (!name) return alert("Please give your strategy a name.");
@@ -60,32 +60,26 @@ export default function StrategyBuilder({ onClose }: BuilderProps) {
     setIsDeploying(true);
 
     try {
-      // The Payload matching our Python Pydantic Schema
+      // The Payload
       const payload = {
         name: name,
         symbol: symbol,
         timeframe: timeframe,
         conditions: conditions,
-        user_id: 1 // Hardcoded for now until Auth is fully live
+        // user_id is NO LONGER needed here, the Backend extracts it from the Token!
       };
 
-      // --- CRITICAL FIX FOR RAILWAY DEPLOYMENT ---
-      // Automatically switches between Localhost and Cloud URL
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-      
-      console.log(`Deploying to: ${API_URL}`); // Debugging log
-
-      const response = await axios.post(`${API_URL}/api/v1/strategy/create`, payload);
+      // --- USING SMART API HELPER ---
+      // This automatically adds the "Authorization: Bearer <token>" header
+      const response = await api.post("/api/v1/strategy/create", payload);
 
       if (response.data.status === "success") {
-        // Optional: Use a nicer toast notification here in the future
-        // alert(`✅ Success! Strategy "${name}" deployed.`);
         onClose(); // Close the modal to trigger the refresh
       }
 
     } catch (error) {
       console.error("Deployment Error:", error);
-      alert("❌ Deployment Failed. Is the Backend Server running?");
+      alert("❌ Deployment Failed. Session might be expired. Try logging in again.");
     } finally {
       setIsDeploying(false);
     }

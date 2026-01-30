@@ -17,16 +17,15 @@ router = APIRouter(
 # --- HELPER: DYNAMIC URL DETECTION ---
 def get_callback_url():
     """
-    Automatically detects if we are on Railway or Localhost.
-    This fixes the 'Redirect URI Mismatch' error.
+    Detects if we are on Railway or Localhost to set the correct Redirect URI.
     """
     railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN")
     
     if railway_domain:
-        # We are on the Cloud
+        # PRODUCTION (Railway)
         return f"https://{railway_domain}/api/v1/broker/fyres/callback"
     else:
-        # We are Local
+        # DEVELOPMENT (Localhost)
         return "http://localhost:8000/api/v1/broker/fyres/callback"
 
 # --- SCHEMAS ---
@@ -41,9 +40,6 @@ class BrokerConnectRequest(BaseModel):
 # 1. SAVE STATIC KEYS (Step 1: Setup)
 @router.post("/connect")
 def connect_broker(data: BrokerConnectRequest, db: Session = Depends(get_db)):
-    """
-    Saves the App ID and Secret Key securely.
-    """
     # Check if user already has this broker entry
     existing = db.query(models.BrokerCredential).filter(
         models.BrokerCredential.user_id == data.user_id,
@@ -51,14 +47,12 @@ def connect_broker(data: BrokerConnectRequest, db: Session = Depends(get_db)):
     ).first()
 
     if existing:
-        # Update existing keys
         existing.client_id = data.client_id
-        existing.api_key = data.api_key # We store the Secret Key here
-        existing.is_active = False      # Reset active status until Morning Login
+        existing.api_key = data.api_key # Storing Secret Key
+        existing.is_active = False      # Reset active status until Login
         db.commit()
         return {"status": "success", "message": f"Updated credentials for {data.broker_name}"}
     
-    # Create new entry
     new_cred = models.BrokerCredential(
         user_id=data.user_id,
         broker_name=data.broker_name,
@@ -86,37 +80,32 @@ def get_broker_status(user_id: int = 1, db: Session = Depends(get_db)):
     ]
 
 
-# 3. GENERATE LOGIN URL (Step 2: Morning Ritual)
+# 3. GENERATE LOGIN URL (Step 2: User clicks 'Login with Fyres')
 @router.get("/fyres/login-url")
 def get_fyres_login_url(user_id: int = 1, db: Session = Depends(get_db)):
-    """
-    Generates the official Fyres Login Link.
-    Uses the Dynamic Callback URL so it works on Cloud and Local.
-    """
     cred = db.query(models.BrokerCredential).filter(
         models.BrokerCredential.user_id == user_id,
         models.BrokerCredential.broker_name == "fyres"
     ).first()
     
     if not cred or not cred.client_id:
-        raise HTTPException(status_code=400, detail="Please save App ID & Secret first in Broker Config")
+        raise HTTPException(status_code=400, detail="Please save App ID & Secret first")
 
+    # This URL points back to YOUR Server (Railway)
     redirect_uri = get_callback_url()
     
-    # We pass 'user_id' in the 'state' parameter so we know who is logging in later
+    # We pass user_id as 'state' to identify who is logging in
     url = f"https://api.fyres.in/auth?type=code&client_id={cred.client_id}&redirect_uri={redirect_uri}&response_type=code&state={user_id}"
     
     return {"login_url": url}
 
 
-# 4. THE CALLBACK (Step 3: Server-Side Token Generation)
+# 4. THE CALLBACK (Step 3: SERVER-SIDE TOKEN GENERATION)
+# This is the most important part. It runs on the Railway Server IP.
 @router.get("/fyres/callback")
 def fyres_callback(auth_code: str = None, code: str = None, state: str = None, db: Session = Depends(get_db)):
-    """
-    This runs on the SERVER IP.
-    It takes the Auth Code from Fyres and exchanges it for a Long-Lived Access Token.
-    """
-    # Fyres sends 'code' or 'auth_code' depending on version
+    
+    # Fyres sends the auth code here
     final_code = code or auth_code
     
     if not final_code:
@@ -127,7 +116,7 @@ def fyres_callback(auth_code: str = None, code: str = None, state: str = None, d
 
     user_id = int(state)
 
-    # Fetch User's Keys from DB
+    # 1. Get User Keys from Database
     cred = db.query(models.BrokerCredential).filter(
         models.BrokerCredential.user_id == user_id,
         models.BrokerCredential.broker_name == "fyres"
@@ -136,15 +125,12 @@ def fyres_callback(auth_code: str = None, code: str = None, state: str = None, d
     if not cred:
         return {"error": "Broker credentials not found for this user"}
 
-    # --- REAL TOKEN GENERATION LOGIC ---
     try:
-        # 1. Prepare Hash (Fyres Requirement: SHA256(appId:appSecret))
+        # 2. Prepare the Hash for Fyres API
+        # Requirement: SHA256(appId + ":" + appSecret)
         app_id = cred.client_id
-        secret_key = cred.api_key # We stored secret here
+        secret_key = cred.api_key 
         
-        # If you want to enable REAL Fyres connection, uncomment the block below:
-        
-        """
         app_id_hash = hashlib.sha256(f"{app_id}:{secret_key}".encode()).hexdigest()
 
         payload = {
@@ -153,42 +139,32 @@ def fyres_callback(auth_code: str = None, code: str = None, state: str = None, d
             "code": final_code,
         }
 
-        # 2. Call Fyres API from Server
+        # 3. SERVER TALKS TO FYRES (This request comes from Railway IP)
+        print("⚡ Exchanging Auth Code for Token on Server IP...")
         response = requests.post("https://api.fyres.in/api/v2/validate-authcode", json=payload)
         data = response.json()
         
+        # 4. Check if Success
         if response.status_code == 200 and "access_token" in data:
             access_token = data["access_token"]
+            print("✅ Token Generated Successfully on Server!")
+            
+            # 5. Save Token to Database
+            cred.access_token = access_token
+            cred.is_active = True
+            db.commit()
+
+            # 6. Redirect User to Dashboard
+            # Determine Frontend URL dynamically
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+            # If FRONTEND_URL is not set in env, we try to guess based on referer or default
+            
+            return RedirectResponse(url=f"{frontend_url}/dashboard?status=connected")
+        
         else:
-            # If real login fails (e.g. invalid keys), we fall back to simulation for testing
-            print(f"Fyres Login Failed: {data}")
-            access_token = f"ey_SIMULATED_TOKEN_{final_code[:5]}"
-        """
-        
-        # --- SIMULATION MODE (For Testing without Real Keys) ---
-        # Since we are testing, we generate a fake token to prove the flow works.
-        # When you have real keys, delete this line and uncomment the block above.
-        access_token = f"ey_SERVER_GENERATED_TOKEN_{final_code[:10]}_VALID_FOR_TODAY"
-        
-        # 3. Save Token to DB
-        cred.access_token = access_token
-        cred.is_active = True
-        db.commit()
-
-        # 4. Redirect to Frontend Dashboard
-        # We need to know where the Frontend is. 
-        # For now, we assume standard ports or Railway URL.
-        
-        frontend_url = "http://localhost:3000/dashboard?status=connected"
-        
-        # If on Railway, we might need to redirect to the Production Frontend URL.
-        # You can add a FRONTEND_URL env var in Railway later.
-        if os.getenv("RAILWAY_PUBLIC_DOMAIN"):
-             # Placeholder: Replace with your actual Vercel/Railway Frontend URL if separate
-             pass 
-
-        return RedirectResponse(url=frontend_url)
+            print(f"❌ Fyres Error: {data}")
+            return {"error": "Failed to generate token", "details": data}
 
     except Exception as e:
-        print(f"Error in callback: {e}")
+        print(f"❌ Internal Server Error: {e}")
         return {"error": f"Internal Server Error: {str(e)}"}

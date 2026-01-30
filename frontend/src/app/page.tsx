@@ -1,9 +1,9 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ShieldCheck, Zap, ArrowRight, BarChart3 } from "lucide-react";
+import { ShieldCheck, Zap, ArrowRight, BarChart3, Terminal, Lock } from "lucide-react";
 import React from "react";
-import Link from "next/link"; // <--- Added for navigation
+import Link from "next/link";
 
 // --- Types Definition ---
 interface CardProps {
@@ -14,14 +14,40 @@ interface CardProps {
 
 export default function Home() {
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden bg-background selection:bg-primary selection:text-black">
+    <main className="min-h-screen flex flex-col relative overflow-hidden bg-background selection:bg-primary selection:text-black font-sans">
       
-      {/* Background Grid - The "Matrix" feel */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#1a1a1a_1px,transparent_1px),linear-gradient(to_bottom,#1a1a1a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-20" />
+      {/* --- BACKGROUND EFFECTS --- */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#1a1a1a_1px,transparent_1px),linear-gradient(to_bottom,#1a1a1a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-20 pointer-events-none" />
+      
+      {/* --- NAVIGATION BAR --- */}
+      <nav className="relative z-50 w-full px-6 py-6 max-w-7xl mx-auto flex items-center justify-between">
+        {/* Logo */}
+        <div className="flex items-center gap-2 text-white font-bold text-xl tracking-tighter">
+          <div className="p-1.5 bg-primary/10 rounded-lg border border-primary/20">
+            <Terminal className="w-5 h-5 text-primary" />
+          </div>
+          TradeMatrix
+        </div>
 
-      <div className="z-10 text-center max-w-5xl px-6">
+        {/* Auth Buttons */}
+        <div className="flex items-center gap-4">
+          <Link href="/login">
+            <button className="text-sm font-medium text-text-dim hover:text-white transition">
+              Log In
+            </button>
+          </Link>
+          <Link href="/login">
+            <button className="bg-white text-black px-5 py-2 rounded-full text-sm font-bold hover:bg-gray-200 transition flex items-center gap-2">
+              Sign Up <ArrowRight size={14} />
+            </button>
+          </Link>
+        </div>
+      </nav>
+
+      {/* --- HERO SECTION --- */}
+      <div className="flex-1 flex flex-col items-center justify-center z-10 text-center max-w-5xl mx-auto px-6 mt-10 md:mt-0">
         
-        {/* Animated Status Badge */}
+        {/* Animated Badge */}
         <motion.div 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -31,7 +57,7 @@ export default function Home() {
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
           </span>
-          <span className="text-xs tracking-wider text-text-dim uppercase font-semibold">NSE Connectivity: Active</span>
+          <span className="text-xs tracking-wider text-text-dim uppercase font-semibold">System Status: Operational</span>
         </motion.div>
 
         {/* Main Title */}
@@ -61,23 +87,23 @@ export default function Home() {
           transition={{ delay: 0.3 }}
           className="flex flex-col md:flex-row gap-4 justify-center items-center"
         >
-          {/* LINKED BUTTON TO DASHBOARD */}
-          <Link href="/dashboard">
+          {/* PRIMARY CTA -> GOES TO LOGIN NOW */}
+          <Link href="/login">
             <button className="group bg-primary text-black px-8 py-4 rounded-lg font-bold text-lg hover:bg-emerald-400 transition-all flex items-center gap-2 shadow-[0_0_20px_rgba(0,227,150,0.3)] hover:shadow-[0_0_30px_rgba(0,227,150,0.5)]">
-              Initialize System <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              Get Started <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </button>
           </Link>
           
           <Link href="/marketplace">
-  <button className="px-8 py-4 rounded-lg font-bold text-lg text-text-dim hover:text-white transition border border-border hover:border-primary/50 hover:bg-surface-hover">
-    View Marketplace
-  </button>
-</Link>
+            <button className="px-8 py-4 rounded-lg font-bold text-lg text-text-dim hover:text-white transition border border-border hover:border-primary/50 hover:bg-surface-hover">
+              View Marketplace
+            </button>
+          </Link>
         </motion.div>
       </div>
 
-      {/* Feature Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-24 z-10 max-w-6xl px-6 w-full pb-20">
+      {/* --- FEATURE GRID --- */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-24 mb-20 z-10 max-w-6xl mx-auto px-6 w-full">
         <Card 
           icon={<Zap className="text-primary" />} 
           title="No-Code Builder" 

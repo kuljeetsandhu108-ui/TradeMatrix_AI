@@ -3,9 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from database import engine, SessionLocal
 import models
+from routers import strategy, broker, execution, auth # <--- Import Auth
 
 # --- IMPORT ROUTERS ---
 from routers import strategy, broker, execution
+from routers import strategy, broker, execution, auth  # <--- MAKE SURE 'auth' IS HERE
+
 
 # 1. Initialize Database Tables
 models.Base.metadata.create_all(bind=engine)
@@ -61,3 +64,5 @@ async def root():
 app.include_router(strategy.router)
 app.include_router(broker.router)
 app.include_router(execution.router)
+app.include_router(auth.router) # <--- Add this line
+app.include_router(auth.router) # <--- CRITICAL: THIS MUST BE HERE

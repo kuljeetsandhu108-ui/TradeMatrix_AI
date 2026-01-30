@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import axios from "axios";
+import { motion } from "framer-motion";
+import api from "../../utils/api"; // <--- CHANGED FROM AXIOS TO API HELPER
 import Link from "next/link"; 
 import { 
   LayoutDashboard, 
@@ -12,35 +12,47 @@ import {
   LogOut, 
   Plus,
   Terminal,
-  TrendingUp,
-  Wallet,
   Server,
   ShoppingCart,
-  Menu,       // <--- New Icon for Mobile
-  X           // <--- New Icon for Mobile
+  Menu,
+  X
 } from "lucide-react";
 
 import StrategyBuilder from "../../components/StrategyBuilder";
 import BrokerConfig from "../../components/BrokerConfig";
 import TradingViewWidget from "../../components/TradingViewWidget";
+import { useRouter } from "next/navigation";
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("builder");
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  
-  // --- MOBILE SIDEBAR STATE ---
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const router = useRouter();
+
+  // Check if user is logged in
+  useEffect(() => {
+    const token = localStorage.getItem("tm_token");
+    if (!token) {
+      router.push("/login"); // Redirect to login if no token
+    }
+  }, [router]);
 
   const handleStrategyCreated = () => {
     setIsBuilderOpen(false);
     setRefreshTrigger(prev => prev + 1);
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem("tm_token");
+    localStorage.removeItem("tm_user");
+    router.push("/login");
+  };
+
   return (
     <div className="flex h-screen bg-background text-text-main overflow-hidden font-sans">
       
-      {/* --- MOBILE OVERLAY (Darkens background when menu is open) --- */}
+      {/* MOBILE OVERLAY */}
       {isSidebarOpen && (
         <div 
           className="fixed inset-0 bg-black/60 z-40 md:hidden backdrop-blur-sm"
@@ -48,7 +60,7 @@ export default function Dashboard() {
         />
       )}
 
-      {/* --- SIDEBAR (Responsive) --- */}
+      {/* SIDEBAR */}
       <aside 
         className={`
           fixed inset-y-0 left-0 z-50 w-64 bg-surface border-r border-border flex flex-col justify-between
@@ -58,7 +70,6 @@ export default function Dashboard() {
         `}
       >
         <div>
-          {/* Logo Area */}
           <div className="p-6 flex items-center justify-between">
             <Link href="/" onClick={() => setIsSidebarOpen(false)}>
               <div className="flex items-center gap-2 text-primary font-bold text-xl tracking-tighter cursor-pointer">
@@ -68,44 +79,17 @@ export default function Dashboard() {
                 TradeMatrix
               </div>
             </Link>
-            
-            {/* Close Button (Mobile Only) */}
-            <button 
-              onClick={() => setIsSidebarOpen(false)} 
-              className="md:hidden text-text-dim hover:text-white"
-            >
+            <button onClick={() => setIsSidebarOpen(false)} className="md:hidden text-text-dim hover:text-white">
               <X size={24} />
             </button>
           </div>
 
-          {/* Navigation Links */}
           <nav className="mt-2 px-4 space-y-2">
-            <NavItem 
-              icon={<LayoutDashboard />} 
-              label="Overview" 
-              active={activeTab === "overview"} 
-              onClick={() => { setActiveTab("overview"); setIsSidebarOpen(false); }} 
-            />
-            <NavItem 
-              icon={<Zap />} 
-              label="Algo Builder" 
-              active={activeTab === "builder"} 
-              onClick={() => { setActiveTab("builder"); setIsSidebarOpen(false); }} 
-            />
-            <NavItem 
-              icon={<Activity />} 
-              label="Live Positions" 
-              active={activeTab === "positions"} 
-              onClick={() => { setActiveTab("positions"); setIsSidebarOpen(false); }} 
-            />
-            <NavItem 
-              icon={<Settings />} 
-              label="Broker Config" 
-              active={activeTab === "settings"} 
-              onClick={() => { setActiveTab("settings"); setIsSidebarOpen(false); }} 
-            />
+            <NavItem icon={<LayoutDashboard />} label="Overview" active={activeTab === "overview"} onClick={() => { setActiveTab("overview"); setIsSidebarOpen(false); }} />
+            <NavItem icon={<Zap />} label="Algo Builder" active={activeTab === "builder"} onClick={() => { setActiveTab("builder"); setIsSidebarOpen(false); }} />
+            <NavItem icon={<Activity />} label="Live Positions" active={activeTab === "positions"} onClick={() => { setActiveTab("positions"); setIsSidebarOpen(false); }} />
+            <NavItem icon={<Settings />} label="Broker Config" active={activeTab === "settings"} onClick={() => { setActiveTab("settings"); setIsSidebarOpen(false); }} />
 
-            {/* MARKETPLACE LINK */}
             <div className="pt-4 mt-4 border-t border-border">
               <Link href="/marketplace">
                 <button className="flex items-center gap-3 w-full px-4 py-3 rounded-lg text-text-dim hover:bg-surface-hover hover:text-white transition group">
@@ -117,37 +101,24 @@ export default function Dashboard() {
           </nav>
         </div>
 
-        {/* Sidebar Footer */}
         <div className="p-4 border-t border-border">
-          <div className="mb-4 px-4 py-3 bg-surface-hover rounded-xl border border-border">
-             <div className="text-xs text-text-dim mb-1">Total P&L (Today)</div>
-             <div className="text-primary font-mono font-bold text-lg">+₹0.00</div>
-          </div>
-          <button className="flex items-center gap-3 text-text-dim hover:text-danger transition w-full px-4 py-3 rounded-lg hover:bg-surface-hover">
+          <button onClick={handleLogout} className="flex items-center gap-3 text-text-dim hover:text-danger transition w-full px-4 py-3 rounded-lg hover:bg-surface-hover">
             <LogOut className="w-5 h-5" />
-            <span className="font-medium">Disconnect</span>
+            <span className="font-medium">Sign Out</span>
           </button>
         </div>
       </aside>
 
-      {/* --- MAIN CONTENT AREA --- */}
+      {/* MAIN CONTENT */}
       <div className="flex-1 flex flex-col relative z-0 overflow-hidden w-full">
-        
-        {/* Top Header */}
         <header className="h-16 border-b border-border bg-surface/50 backdrop-blur-md flex items-center justify-between px-4 md:px-8 shrink-0">
           <div className="flex items-center gap-4">
-             {/* HAMBURGER MENU (Mobile Only) */}
-             <button 
-               onClick={() => setIsSidebarOpen(true)}
-               className="md:hidden p-2 -ml-2 text-text-dim hover:text-white"
-             >
+             <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 -ml-2 text-text-dim hover:text-white">
                <Menu size={24} />
              </button>
-
              <div className="flex flex-col">
                 <h2 className="text-sm md:text-lg font-bold text-white flex items-center gap-2">
-                  NSE Engine
-                  <span className="px-2 py-0.5 rounded text-[10px] bg-primary/20 text-primary border border-primary/30 hidden md:inline-block">LIVE</span>
+                  NSE Engine <span className="px-2 py-0.5 rounded text-[10px] bg-primary/20 text-primary border border-primary/30 hidden md:inline-block">LIVE</span>
                 </h2>
                 <div className="flex items-center gap-2 text-[10px] md:text-xs text-text-dim font-mono">
                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
@@ -155,16 +126,13 @@ export default function Dashboard() {
                 </div>
              </div>
           </div>
-          
           <div className="flex items-center gap-3 md:gap-6">
              <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-surface border border-border rounded-full text-xs font-mono text-text-dim">
-                <Server className="w-3 h-3 text-primary" />
-                Online
+                <Server className="w-3 h-3 text-primary" /> Online
              </div>
-             
              <div className="flex items-center gap-3 pl-3 md:pl-6 md:border-l border-border">
                 <div className="text-right hidden md:block">
-                   <div className="text-sm text-white font-medium">Kuljeet Singh</div>
+                   <div className="text-sm text-white font-medium">Trader</div>
                    <div className="text-xs text-text-dim">Pro Plan</div>
                 </div>
                 <div className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-gradient-to-tr from-primary to-blue-500 border-2 border-surface shadow-lg"></div>
@@ -172,18 +140,13 @@ export default function Dashboard() {
           </div>
         </header>
 
-        {/* Workspace Canvas */}
         <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-background relative scroll-smooth">
            <div className="absolute inset-0 bg-[linear-gradient(to_right,#1a1a1a_1px,transparent_1px),linear-gradient(to_bottom,#1a1a1a_1px,transparent_1px)] bg-[size:2rem_2rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-10 pointer-events-none" />
 
            <div className="relative z-10 pb-20 md:pb-0">
               {activeTab === "builder" && (
-                <AlgoBuilderView 
-                  onOpenBuilder={() => setIsBuilderOpen(true)} 
-                  refreshTrigger={refreshTrigger}
-                />
+                <AlgoBuilderView onOpenBuilder={() => setIsBuilderOpen(true)} refreshTrigger={refreshTrigger} />
               )}
-              
               {activeTab === "overview" && (
                 <div className="h-[80vh] flex flex-col gap-6">
                    <div className="flex justify-between items-end">
@@ -191,24 +154,17 @@ export default function Dashboard() {
                         <h1 className="text-2xl md:text-3xl font-bold text-white">Market Overview</h1>
                         <p className="text-text-dim text-sm">Real-time charting and technical analysis.</p>
                       </div>
-                      <div className="flex gap-2 hidden md:flex">
-                         <span className="px-3 py-1 bg-green-500/10 text-green-500 border border-green-500/20 rounded text-xs font-mono">NIFTY: Bullish</span>
-                         <span className="px-3 py-1 bg-red-500/10 text-red-500 border border-red-500/20 rounded text-xs font-mono">VIX: 13.2</span>
-                      </div>
                    </div>
                    <div className="flex-1 min-h-[400px]">
                       <TradingViewWidget />
                    </div>
                 </div>
               )}
-
               {activeTab === "positions" && <PlaceholderView title="Live Positions" />}
               {activeTab === "settings" && <BrokerConfig />} 
            </div>
            
-           {isBuilderOpen && (
-             <StrategyBuilder onClose={handleStrategyCreated} />
-           )}
+           {isBuilderOpen && <StrategyBuilder onClose={handleStrategyCreated} />}
         </main>
       </div>
     </div>
@@ -219,19 +175,11 @@ export default function Dashboard() {
 
 function NavItem({ icon, label, active, onClick }: any) {
   return (
-    <button 
-      onClick={onClick}
-      className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg transition-all group ${
-        active 
-          ? "bg-primary/10 text-primary border border-primary/20 shadow-[0_0_15px_rgba(0,227,150,0.1)]" 
-          : "text-text-dim hover:bg-surface-hover hover:text-white border border-transparent"
-      }`}
-    >
+    <button onClick={onClick} className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg transition-all group ${active ? "bg-primary/10 text-primary border border-primary/20" : "text-text-dim hover:bg-surface-hover hover:text-white"}`}>
       <div className={`transition-transform group-hover:scale-110 ${active ? "text-primary" : "text-text-dim group-hover:text-white"}`}>
         {React.cloneElement(icon, { size: 20 })}
       </div>
       <span className="font-medium text-sm">{label}</span>
-      {active && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_var(--primary)]" />}
     </button>
   );
 }
@@ -257,7 +205,8 @@ function AlgoBuilderView({ onOpenBuilder, refreshTrigger }: { onOpenBuilder: () 
   const fetchStrategies = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/v1/strategy/list`);
+      // NOTE: Using 'api' here automatically adds Authorization header!
+      const response = await api.get("/api/v1/strategy/list");
       setStrategies(response.data);
     } catch (error) {
       console.error("Failed to fetch strategies", error);
@@ -273,7 +222,7 @@ function AlgoBuilderView({ onOpenBuilder, refreshTrigger }: { onOpenBuilder: () 
     if (selectedStrategyId) {
       interval = setInterval(async () => {
         try {
-          const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/v1/execution/logs/${selectedStrategyId}`);
+          const res = await api.get(`/api/v1/execution/logs/${selectedStrategyId}`);
           if (res.data.logs) setActiveLogs(res.data.logs.reverse());
         } catch (e) { console.error(e); }
       }, 1000);
@@ -284,17 +233,16 @@ function AlgoBuilderView({ onOpenBuilder, refreshTrigger }: { onOpenBuilder: () 
   const toggleStrategy = async (id: number, currentStatus: boolean, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
       if (currentStatus) {
-        await axios.post(`${baseUrl}/api/v1/execution/stop/${id}`);
+        await api.post(`/api/v1/execution/stop/${id}`);
         setSelectedStrategyId(null);
       } else {
-        await axios.post(`${baseUrl}/api/v1/execution/start/${id}`);
+        await api.post(`/api/v1/execution/start/${id}`);
         setSelectedStrategyId(id);
       }
       fetchStrategies();
     } catch (error) {
-      alert("Failed to toggle strategy. Check Backend Connection.");
+      alert("Failed to toggle strategy.");
     }
   };
 
@@ -306,10 +254,7 @@ function AlgoBuilderView({ onOpenBuilder, refreshTrigger }: { onOpenBuilder: () 
               <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Strategy Builder</h1>
               <p className="text-text-dim text-sm">Your deployed algorithms running on the Engine.</p>
             </div>
-            <button 
-              onClick={onOpenBuilder}
-              className="flex items-center justify-center gap-2 bg-primary text-black px-6 py-2.5 rounded-lg font-bold hover:bg-emerald-400 transition shadow-[0_0_20px_rgba(0,227,150,0.2)] hover:shadow-[0_0_30px_rgba(0,227,150,0.4)] w-full md:w-auto"
-            >
+            <button onClick={onOpenBuilder} className="flex items-center justify-center gap-2 bg-primary text-black px-6 py-2.5 rounded-lg font-bold hover:bg-emerald-400 transition shadow-[0_0_20px_rgba(0,227,150,0.2)]">
                <Plus className="w-5 h-5" /> New Strategy
             </button>
          </div>
@@ -318,19 +263,12 @@ function AlgoBuilderView({ onOpenBuilder, refreshTrigger }: { onOpenBuilder: () 
            <div className="text-center py-20 border border-dashed border-border rounded-xl bg-surface/20">
              <Zap className="w-12 h-12 text-text-dim mx-auto mb-4 opacity-50" />
              <p className="text-text-dim text-lg">No strategies deployed yet.</p>
-             <p className="text-sm text-gray-600">Click "New Strategy" to create your first bot.</p>
            </div>
          )}
 
          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2 gap-4">
             {strategies.map((strat) => (
-              <div 
-                key={strat.id} 
-                onClick={() => setSelectedStrategyId(strat.id)}
-                className={`bg-surface border p-6 rounded-xl transition cursor-pointer relative overflow-hidden group ${
-                  selectedStrategyId === strat.id ? "border-primary" : "border-border hover:border-primary/50"
-                }`}
-              >
+              <div key={strat.id} onClick={() => setSelectedStrategyId(strat.id)} className={`bg-surface border p-6 rounded-xl transition cursor-pointer relative overflow-hidden group ${selectedStrategyId === strat.id ? "border-primary" : "border-border hover:border-primary/50"}`}>
                  <div className="flex justify-between items-center relative z-10">
                     <div>
                       <h3 className="text-lg md:text-xl font-bold text-white mb-1 capitalize flex items-center gap-2">
@@ -338,18 +276,10 @@ function AlgoBuilderView({ onOpenBuilder, refreshTrigger }: { onOpenBuilder: () 
                         {strat.is_running && <span className="text-[10px] bg-green-500 text-black px-2 py-0.5 rounded font-bold animate-pulse">RUNNING</span>}
                       </h3>
                       <div className="text-text-dim text-xs md:text-sm font-mono flex gap-2">
-                        <span>{strat.symbol}</span> • <span>{strat.timeframe}</span> • <span>{strat.conditions.length} Rules</span>
+                        <span>{strat.symbol}</span> • <span>{strat.timeframe}</span>
                       </div>
                     </div>
-                    <button
-                      onClick={(e) => toggleStrategy(strat.id, strat.is_running, e)}
-                      className={`p-3 rounded-full transition shadow-lg flex items-center justify-center ${
-                        strat.is_running 
-                          ? "bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white" 
-                          : "bg-primary/10 text-primary hover:bg-primary hover:text-black"
-                      }`}
-                      title={strat.is_running ? "Stop Strategy" : "Start Strategy"}
-                    >
+                    <button onClick={(e) => toggleStrategy(strat.id, strat.is_running, e)} className={`p-3 rounded-full transition shadow-lg flex items-center justify-center ${strat.is_running ? "bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white" : "bg-primary/10 text-primary hover:bg-primary hover:text-black"}`}>
                       {strat.is_running ? <Square fill="currentColor" size={18} /> : <Play fill="currentColor" size={18} />}
                     </button>
                  </div>
@@ -358,30 +288,15 @@ function AlgoBuilderView({ onOpenBuilder, refreshTrigger }: { onOpenBuilder: () 
          </div>
        </div>
 
-       {/* LOGS PANEL (Responsive) */}
        {selectedStrategyId && (
          <div className="w-full xl:w-[400px] h-[400px] md:h-[600px] bg-[#0c0c0c] border border-border rounded-xl overflow-hidden flex flex-col shadow-2xl xl:sticky xl:top-8">
             <div className="bg-surface border-b border-border p-3 flex items-center gap-2 text-text-dim text-xs font-mono">
               <TerminalIcon size={14} /> Execution Logs
             </div>
             <div className="flex-1 p-4 overflow-y-auto font-mono text-[10px] md:text-xs space-y-2 custom-scrollbar">
-               {activeLogs.length === 0 ? (
-                 <div className="text-gray-600 italic">Waiting for market data...</div>
-               ) : (
-                 activeLogs.map((log, i) => (
-                   <div key={i} className="border-b border-white/5 pb-1">
-                     <span className="text-gray-500 opacity-50">[{log.split(']')[0].replace('[','')}</span> 
-                     <span className={`ml-2 ${
-                        log.includes("BUY") ? "text-green-400 font-bold" : 
-                        log.includes("SELL") ? "text-red-400 font-bold" : 
-                        log.includes("SIGNAL") ? "text-yellow-400" :
-                        "text-gray-300"
-                     }`}>
-                       {log.split(']')[1]}
-                     </span>
-                   </div>
-                 ))
-               )}
+               {activeLogs.length === 0 ? <div className="text-gray-600 italic">Waiting...</div> : activeLogs.map((log, i) => (
+                   <div key={i} className="border-b border-white/5 pb-1 text-gray-300">{log}</div>
+               ))}
             </div>
          </div>
        )}
@@ -392,11 +307,8 @@ function AlgoBuilderView({ onOpenBuilder, refreshTrigger }: { onOpenBuilder: () 
 function PlaceholderView({ title }: { title: string }) {
   return (
     <div className="flex flex-col items-center justify-center h-[60vh] text-center opacity-50">
-      <div className="bg-surface p-6 rounded-full border border-border mb-4">
-        <Settings className="w-10 h-10 text-text-dim" />
-      </div>
       <h2 className="text-2xl font-bold text-white mb-2">{title}</h2>
-      <p className="text-text-dim max-w-md">This module is currently under construction. Connect Broker API to enable live data.</p>
+      <p className="text-text-dim">Connect Broker API to enable data.</p>
     </div>
   );
 }
