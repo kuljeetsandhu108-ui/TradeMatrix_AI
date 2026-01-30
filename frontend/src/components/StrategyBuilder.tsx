@@ -52,7 +52,7 @@ export default function StrategyBuilder({ onClose }: BuilderProps) {
     ));
   };
 
-  // 4. SAVE & DEPLOY TO BACKEND
+  // 4. SAVE & DEPLOY TO BACKEND (Cloud Aware)
   const handleSave = async () => {
     // Basic Validation
     if (!name) return alert("Please give your strategy a name.");
@@ -66,16 +66,21 @@ export default function StrategyBuilder({ onClose }: BuilderProps) {
         symbol: symbol,
         timeframe: timeframe,
         conditions: conditions,
-        user_id: 1 // Hardcoded for now until we add Auth
+        user_id: 1 // Hardcoded for now until Auth is fully live
       };
 
-      // Send to Python Brain
-      // Ensure your backend is running on port 8000
-      const response = await axios.post("http://127.0.0.1:8000/api/v1/strategy/create", payload);
+      // --- CRITICAL FIX FOR RAILWAY DEPLOYMENT ---
+      // Automatically switches between Localhost and Cloud URL
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+      
+      console.log(`Deploying to: ${API_URL}`); // Debugging log
+
+      const response = await axios.post(`${API_URL}/api/v1/strategy/create`, payload);
 
       if (response.data.status === "success") {
-        alert(`✅ Success! Strategy "${name}" deployed with ID: ${response.data.strategy_id}`);
-        onClose(); // Close the modal
+        // Optional: Use a nicer toast notification here in the future
+        // alert(`✅ Success! Strategy "${name}" deployed.`);
+        onClose(); // Close the modal to trigger the refresh
       }
 
     } catch (error) {
