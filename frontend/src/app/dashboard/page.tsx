@@ -1,9 +1,9 @@
 "use client";
-import TradingViewWidget from "../../components/TradingViewWidget";
+
 import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
-import Link from "next/link"; // <--- Import Link
+import Link from "next/link"; 
 import { 
   LayoutDashboard, 
   Activity, 
@@ -15,16 +15,22 @@ import {
   TrendingUp,
   Wallet,
   Server,
-  ShoppingCart // <--- Import ShoppingCart Icon
+  ShoppingCart,
+  Menu,       // <--- New Icon for Mobile
+  X           // <--- New Icon for Mobile
 } from "lucide-react";
 
 import StrategyBuilder from "../../components/StrategyBuilder";
-import BrokerConfig from "../../components/BrokerConfig"; // Import Broker Config
+import BrokerConfig from "../../components/BrokerConfig";
+import TradingViewWidget from "../../components/TradingViewWidget";
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState("builder"); // <--- Set default to 'builder' so you see buttons first
+  const [activeTab, setActiveTab] = useState("builder");
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  
+  // --- MOBILE SIDEBAR STATE ---
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const handleStrategyCreated = () => {
     setIsBuilderOpen(false);
@@ -34,51 +40,72 @@ export default function Dashboard() {
   return (
     <div className="flex h-screen bg-background text-text-main overflow-hidden font-sans">
       
-      {/* --- SIDEBAR --- */}
-      <motion.div 
-        initial={{ x: -100 }}
-        animate={{ x: 0 }}
-        className="w-64 bg-surface border-r border-border flex flex-col justify-between"
+      {/* --- MOBILE OVERLAY (Darkens background when menu is open) --- */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 z-40 md:hidden backdrop-blur-sm"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      {/* --- SIDEBAR (Responsive) --- */}
+      <aside 
+        className={`
+          fixed inset-y-0 left-0 z-50 w-64 bg-surface border-r border-border flex flex-col justify-between
+          transform transition-transform duration-300 ease-in-out
+          ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"} 
+          md:relative md:translate-x-0
+        `}
       >
         <div>
           {/* Logo Area */}
-          <Link href="/">
-            <div className="p-6 flex items-center gap-2 text-primary font-bold text-xl tracking-tighter cursor-pointer hover:opacity-80 transition">
-              <div className="p-1.5 bg-primary/10 rounded-lg border border-primary/20">
-                <Terminal className="w-5 h-5" />
+          <div className="p-6 flex items-center justify-between">
+            <Link href="/" onClick={() => setIsSidebarOpen(false)}>
+              <div className="flex items-center gap-2 text-primary font-bold text-xl tracking-tighter cursor-pointer">
+                <div className="p-1.5 bg-primary/10 rounded-lg border border-primary/20">
+                  <Terminal className="w-5 h-5" />
+                </div>
+                TradeMatrix
               </div>
-              TradeMatrix
-            </div>
-          </Link>
+            </Link>
+            
+            {/* Close Button (Mobile Only) */}
+            <button 
+              onClick={() => setIsSidebarOpen(false)} 
+              className="md:hidden text-text-dim hover:text-white"
+            >
+              <X size={24} />
+            </button>
+          </div>
 
           {/* Navigation Links */}
-          <nav className="mt-6 px-4 space-y-2">
+          <nav className="mt-2 px-4 space-y-2">
             <NavItem 
               icon={<LayoutDashboard />} 
               label="Overview" 
               active={activeTab === "overview"} 
-              onClick={() => setActiveTab("overview")} 
+              onClick={() => { setActiveTab("overview"); setIsSidebarOpen(false); }} 
             />
             <NavItem 
               icon={<Zap />} 
               label="Algo Builder" 
               active={activeTab === "builder"} 
-              onClick={() => setActiveTab("builder")} 
+              onClick={() => { setActiveTab("builder"); setIsSidebarOpen(false); }} 
             />
             <NavItem 
               icon={<Activity />} 
               label="Live Positions" 
               active={activeTab === "positions"} 
-              onClick={() => setActiveTab("positions")} 
+              onClick={() => { setActiveTab("positions"); setIsSidebarOpen(false); }} 
             />
             <NavItem 
               icon={<Settings />} 
               label="Broker Config" 
               active={activeTab === "settings"} 
-              onClick={() => setActiveTab("settings")} 
+              onClick={() => { setActiveTab("settings"); setIsSidebarOpen(false); }} 
             />
 
-            {/* MARKETPLACE LINK (New) */}
+            {/* MARKETPLACE LINK */}
             <div className="pt-4 mt-4 border-t border-border">
               <Link href="/marketplace">
                 <button className="flex items-center gap-3 w-full px-4 py-3 rounded-lg text-text-dim hover:bg-surface-hover hover:text-white transition group">
@@ -101,47 +128,55 @@ export default function Dashboard() {
             <span className="font-medium">Disconnect</span>
           </button>
         </div>
-      </motion.div>
+      </aside>
 
       {/* --- MAIN CONTENT AREA --- */}
-      <div className="flex-1 flex flex-col relative z-0 overflow-hidden">
+      <div className="flex-1 flex flex-col relative z-0 overflow-hidden w-full">
         
         {/* Top Header */}
-        <header className="h-16 border-b border-border bg-surface/50 backdrop-blur-md flex items-center justify-between px-8">
+        <header className="h-16 border-b border-border bg-surface/50 backdrop-blur-md flex items-center justify-between px-4 md:px-8 shrink-0">
           <div className="flex items-center gap-4">
+             {/* HAMBURGER MENU (Mobile Only) */}
+             <button 
+               onClick={() => setIsSidebarOpen(true)}
+               className="md:hidden p-2 -ml-2 text-text-dim hover:text-white"
+             >
+               <Menu size={24} />
+             </button>
+
              <div className="flex flex-col">
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  NSE Derivative Engine
-                  <span className="px-2 py-0.5 rounded text-[10px] bg-primary/20 text-primary border border-primary/30">LIVE</span>
+                <h2 className="text-sm md:text-lg font-bold text-white flex items-center gap-2">
+                  NSE Engine
+                  <span className="px-2 py-0.5 rounded text-[10px] bg-primary/20 text-primary border border-primary/30 hidden md:inline-block">LIVE</span>
                 </h2>
-                <div className="flex items-center gap-2 text-xs text-text-dim font-mono">
+                <div className="flex items-center gap-2 text-[10px] md:text-xs text-text-dim font-mono">
                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
-                   MARKET OPEN • NIFTY: <span className="text-white">21,456.30</span>
+                   NIFTY: <span className="text-white">21,456.30</span>
                 </div>
              </div>
           </div>
           
-          <div className="flex items-center gap-6">
-             <div className="flex items-center gap-2 px-3 py-1.5 bg-surface border border-border rounded-full text-xs font-mono text-text-dim">
+          <div className="flex items-center gap-3 md:gap-6">
+             <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-surface border border-border rounded-full text-xs font-mono text-text-dim">
                 <Server className="w-3 h-3 text-primary" />
-                System: Online
+                Online
              </div>
              
-             <div className="flex items-center gap-3 border-l border-border pl-6">
+             <div className="flex items-center gap-3 pl-3 md:pl-6 md:border-l border-border">
                 <div className="text-right hidden md:block">
                    <div className="text-sm text-white font-medium">Kuljeet Singh</div>
                    <div className="text-xs text-text-dim">Pro Plan</div>
                 </div>
-                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-primary to-blue-500 border-2 border-surface shadow-lg"></div>
+                <div className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-gradient-to-tr from-primary to-blue-500 border-2 border-surface shadow-lg"></div>
              </div>
           </div>
         </header>
 
         {/* Workspace Canvas */}
-        <main className="flex-1 overflow-y-auto p-8 bg-background relative">
+        <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-background relative scroll-smooth">
            <div className="absolute inset-0 bg-[linear-gradient(to_right,#1a1a1a_1px,transparent_1px),linear-gradient(to_bottom,#1a1a1a_1px,transparent_1px)] bg-[size:2rem_2rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-10 pointer-events-none" />
 
-           <div className="relative z-10">
+           <div className="relative z-10 pb-20 md:pb-0">
               {activeTab === "builder" && (
                 <AlgoBuilderView 
                   onOpenBuilder={() => setIsBuilderOpen(true)} 
@@ -150,25 +185,23 @@ export default function Dashboard() {
               )}
               
               {activeTab === "overview" && (
-  <div className="h-[80vh] flex flex-col gap-6">
-     <div className="flex justify-between items-end">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Market Overview</h1>
-          <p className="text-text-dim">Real-time charting and technical analysis.</p>
-        </div>
-        {/* Quick Chips */}
-        <div className="flex gap-2">
-           <span className="px-3 py-1 bg-green-500/10 text-green-500 border border-green-500/20 rounded text-xs font-mono">NIFTY: Bullish</span>
-           <span className="px-3 py-1 bg-red-500/10 text-red-500 border border-red-500/20 rounded text-xs font-mono">VIX: 13.2</span>
-        </div>
-     </div>
-     
-     {/* THE CHART */}
-     <div className="flex-1 min-h-[500px]">
-        <TradingViewWidget />
-     </div>
-  </div>
-)}
+                <div className="h-[80vh] flex flex-col gap-6">
+                   <div className="flex justify-between items-end">
+                      <div>
+                        <h1 className="text-2xl md:text-3xl font-bold text-white">Market Overview</h1>
+                        <p className="text-text-dim text-sm">Real-time charting and technical analysis.</p>
+                      </div>
+                      <div className="flex gap-2 hidden md:flex">
+                         <span className="px-3 py-1 bg-green-500/10 text-green-500 border border-green-500/20 rounded text-xs font-mono">NIFTY: Bullish</span>
+                         <span className="px-3 py-1 bg-red-500/10 text-red-500 border border-red-500/20 rounded text-xs font-mono">VIX: 13.2</span>
+                      </div>
+                   </div>
+                   <div className="flex-1 min-h-[400px]">
+                      <TradingViewWidget />
+                   </div>
+                </div>
+              )}
+
               {activeTab === "positions" && <PlaceholderView title="Live Positions" />}
               {activeTab === "settings" && <BrokerConfig />} 
            </div>
@@ -203,7 +236,7 @@ function NavItem({ icon, label, active, onClick }: any) {
   );
 }
 
-// --- ALGO BUILDER VIEW (With Live Logs) ---
+// --- ALGO BUILDER VIEW ---
 import { Play, Square, Terminal as TerminalIcon } from "lucide-react";
 
 interface Strategy {
@@ -224,7 +257,7 @@ function AlgoBuilderView({ onOpenBuilder, refreshTrigger }: { onOpenBuilder: () 
   const fetchStrategies = async () => {
     try {
       setLoading(true);
-      const response = await axios.get("http://127.0.0.1:8000/api/v1/strategy/list");
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/v1/strategy/list`);
       setStrategies(response.data);
     } catch (error) {
       console.error("Failed to fetch strategies", error);
@@ -235,13 +268,12 @@ function AlgoBuilderView({ onOpenBuilder, refreshTrigger }: { onOpenBuilder: () 
 
   useEffect(() => { fetchStrategies(); }, [refreshTrigger]);
 
-  // Log Polling
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (selectedStrategyId) {
       interval = setInterval(async () => {
         try {
-          const res = await axios.get(`http://127.0.0.1:8000/api/v1/execution/logs/${selectedStrategyId}`);
+          const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/v1/execution/logs/${selectedStrategyId}`);
           if (res.data.logs) setActiveLogs(res.data.logs.reverse());
         } catch (e) { console.error(e); }
       }, 1000);
@@ -252,11 +284,12 @@ function AlgoBuilderView({ onOpenBuilder, refreshTrigger }: { onOpenBuilder: () 
   const toggleStrategy = async (id: number, currentStatus: boolean, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
       if (currentStatus) {
-        await axios.post(`http://127.0.0.1:8000/api/v1/execution/stop/${id}`);
+        await axios.post(`${baseUrl}/api/v1/execution/stop/${id}`);
         setSelectedStrategyId(null);
       } else {
-        await axios.post(`http://127.0.0.1:8000/api/v1/execution/start/${id}`);
+        await axios.post(`${baseUrl}/api/v1/execution/start/${id}`);
         setSelectedStrategyId(id);
       }
       fetchStrategies();
@@ -266,16 +299,16 @@ function AlgoBuilderView({ onOpenBuilder, refreshTrigger }: { onOpenBuilder: () 
   };
 
   return (
-    <div className="max-w-6xl mx-auto flex gap-6">
+    <div className="flex flex-col xl:flex-row gap-6">
        <div className="flex-1">
-         <div className="flex items-center justify-between mb-8">
+         <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-white mb-2">Strategy Builder</h1>
-              <p className="text-text-dim">Your deployed algorithms running on the High-Frequency Engine.</p>
+              <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Strategy Builder</h1>
+              <p className="text-text-dim text-sm">Your deployed algorithms running on the Engine.</p>
             </div>
             <button 
               onClick={onOpenBuilder}
-              className="flex items-center gap-2 bg-primary text-black px-6 py-2.5 rounded-lg font-bold hover:bg-emerald-400 transition shadow-[0_0_20px_rgba(0,227,150,0.2)] hover:shadow-[0_0_30px_rgba(0,227,150,0.4)]"
+              className="flex items-center justify-center gap-2 bg-primary text-black px-6 py-2.5 rounded-lg font-bold hover:bg-emerald-400 transition shadow-[0_0_20px_rgba(0,227,150,0.2)] hover:shadow-[0_0_30px_rgba(0,227,150,0.4)] w-full md:w-auto"
             >
                <Plus className="w-5 h-5" /> New Strategy
             </button>
@@ -289,7 +322,7 @@ function AlgoBuilderView({ onOpenBuilder, refreshTrigger }: { onOpenBuilder: () 
            </div>
          )}
 
-         <div className="space-y-4">
+         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2 gap-4">
             {strategies.map((strat) => (
               <div 
                 key={strat.id} 
@@ -300,12 +333,12 @@ function AlgoBuilderView({ onOpenBuilder, refreshTrigger }: { onOpenBuilder: () 
               >
                  <div className="flex justify-between items-center relative z-10">
                     <div>
-                      <h3 className="text-xl font-bold text-white mb-1 capitalize flex items-center gap-2">
+                      <h3 className="text-lg md:text-xl font-bold text-white mb-1 capitalize flex items-center gap-2">
                         {strat.name}
                         {strat.is_running && <span className="text-[10px] bg-green-500 text-black px-2 py-0.5 rounded font-bold animate-pulse">RUNNING</span>}
                       </h3>
-                      <div className="text-text-dim text-sm font-mono flex gap-2">
-                        <span>{strat.symbol}</span> • <span>{strat.timeframe}</span> • <span>{strat.conditions.length} Conditions</span>
+                      <div className="text-text-dim text-xs md:text-sm font-mono flex gap-2">
+                        <span>{strat.symbol}</span> • <span>{strat.timeframe}</span> • <span>{strat.conditions.length} Rules</span>
                       </div>
                     </div>
                     <button
@@ -325,17 +358,13 @@ function AlgoBuilderView({ onOpenBuilder, refreshTrigger }: { onOpenBuilder: () 
          </div>
        </div>
 
+       {/* LOGS PANEL (Responsive) */}
        {selectedStrategyId && (
-         <div className="w-[400px] h-[600px] bg-[#0c0c0c] border border-border rounded-xl overflow-hidden flex flex-col shadow-2xl sticky top-8">
+         <div className="w-full xl:w-[400px] h-[400px] md:h-[600px] bg-[#0c0c0c] border border-border rounded-xl overflow-hidden flex flex-col shadow-2xl xl:sticky xl:top-8">
             <div className="bg-surface border-b border-border p-3 flex items-center gap-2 text-text-dim text-xs font-mono">
               <TerminalIcon size={14} /> Execution Logs
             </div>
-            <div className="flex-1 p-4 overflow-y-auto font-mono text-[10px] space-y-2 custom-scrollbar">
-               <div className="flex gap-2 mb-4 justify-end">
-                  <div className="w-2 h-2 rounded-full bg-red-500"/>
-                  <div className="w-2 h-2 rounded-full bg-yellow-500"/>
-                  <div className="w-2 h-2 rounded-full bg-green-500"/>
-               </div>
+            <div className="flex-1 p-4 overflow-y-auto font-mono text-[10px] md:text-xs space-y-2 custom-scrollbar">
                {activeLogs.length === 0 ? (
                  <div className="text-gray-600 italic">Waiting for market data...</div>
                ) : (
