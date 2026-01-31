@@ -113,6 +113,11 @@ class TradeBot:
                 if self.broker:
                     # --- STEP 1: GET MARKET DATA ---
                     current_price = self.broker.get_market_price(self.symbol)
+
+                    if current_price:
+                        # Log price once every 10 loops to confirm life
+                        if datetime.now().second % 30 == 0:
+                             self.log(f"📊 Live Price: {current_price}")
                     
                     # Fetch enough history to calculate indicators (e.g., 200 candles)
                     df = self.broker.get_historical_data(self.symbol, self.strategy.timeframe, limit=200)
