@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import api from "../utils/api";
-import { Shield, CheckCircle, Key, Lock, Server, RefreshCw } from "lucide-react";
+import { Shield, CheckCircle, Key, Lock, Server, RefreshCw, Trash2 } from "lucide-react";
 
 export default function BrokerConfig() {
-  const [selectedBroker, setSelectedBroker] = useState("delta"); // Default to Delta Exchange
+  const [selectedBroker, setSelectedBroker] = useState("delta");
   const [apiKey, setApiKey] = useState("");
   const [secretKey, setSecretKey] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
@@ -23,21 +23,32 @@ export default function BrokerConfig() {
     
     setStatus("loading");
     try {
-      // We assume user_id 1 for now (or backend extracts from token)
-      // The backend 'connect' endpoint expects: broker_name, api_key, secret_key, user_id
       await api.post("/api/v1/broker/connect", {
         broker_name: selectedBroker,
         api_key: apiKey,
         secret_key: secretKey, 
-        user_id: 1 
       });
       
       setStatus("success");
+      setApiKey(""); // Clear inputs for security
+      setSecretKey("");
       checkStatus();
       setTimeout(() => setStatus("idle"), 2000);
     } catch (error) {
       console.error(error);
       setStatus("error");
+    }
+  };
+
+  // --- DELETE FUNCTION ---
+  const handleDelete = async (brokerName: string) => {
+    if (!confirm(`Are you sure you want to remove ${brokerName}? Bots using this will stop.`)) return;
+
+    try {
+      await api.delete(`/api/v1/broker/${brokerName}`);
+      checkStatus(); // Refresh list immediately
+    } catch (error) {
+      alert("Failed to delete broker.");
     }
   };
 
@@ -130,7 +141,7 @@ export default function BrokerConfig() {
            
            {connectedBrokers.length > 0 ? (
              connectedBrokers.map((b: any, i) => (
-               <div key={i} className="bg-surface border border-border p-4 rounded-lg flex justify-between items-center mb-2">
+               <div key={i} className="bg-surface border border-border p-4 rounded-lg flex justify-between items-center mb-2 group hover:border-primary/30 transition">
                  <div className="flex items-center gap-3">
                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                    <div>
@@ -138,7 +149,18 @@ export default function BrokerConfig() {
                      <div className="text-[10px] text-text-dim font-mono uppercase">Key: {b.key_preview}</div>
                    </div>
                  </div>
-                 <span className="text-green-500 text-xs bg-green-500/10 px-2 py-1 rounded border border-green-500/20">Connected</span>
+                 
+                 <div className="flex items-center gap-3">
+                    <span className="text-green-500 text-xs bg-green-500/10 px-2 py-1 rounded border border-green-500/20">Connected</span>
+                    {/* DELETE BUTTON */}
+                    <button 
+                      onClick={() => handleDelete(b.broker)}
+                      className="text-text-dim hover:text-red-500 transition p-2 hover:bg-surface-hover rounded-full"
+                      title="Disconnect Exchange"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                 </div>
                </div>
              ))
            ) : (
