@@ -102,97 +102,88 @@ class TradeBot:
             # self.log(f"Calc Error ({indicator_name}): {e}") 
             return 0
 
+    # ... (imports and init remain the same) ...
+
     async def run(self):
-        """
-        The Infinite Loop that runs 24/7 on the server.
-        """
         self.log(f"🚀 Started Dynamic Engine. Watching {len(self.rules)} Rules.")
         
         while self.is_active:
             try:
                 if self.broker:
-                    # --- STEP 1: GET MARKET DATA ---
+                    # 1. GET DATA
                     current_price = self.broker.get_market_price(self.symbol)
-
-                    if current_price:
-                        # Log price once every 10 loops to confirm life
-                        if datetime.now().second % 30 == 0:
-                             self.log(f"📊 Live Price: {current_price}")
                     
-                    # Fetch enough history to calculate indicators (e.g., 200 candles)
-                    df = self.broker.get_historical_data(self.symbol, self.strategy.timeframe, limit=200)
-                    
-                    if df.empty:
-                        self.log("⏳ Waiting for market data candles...")
+                    if not current_price:
+                        self.log("⚠️ Price fetch failed.")
                         await asyncio.sleep(5)
                         continue
 
-                    # --- STEP 2: EVALUATE RULES ---
+                    # 2. GET HISTORY
+                    df = self.broker.get_historical_data(self.symbol, self.strategy.timeframe, limit=200)
+                    if df.empty:
+                        self.log("⏳ Waiting for candles...")
+                        await asyncio.sleep(5)
+                        continue
+
+                    # 3. EVALUATE RULES
                     should_buy = False
-                    should_sell = False # Can be added later for shorting
                     
                     for rule in self.rules:
-                        # Calculate Left Side (e.g. EMA 9)
                         val_a = self.calculate_indicator_value(df, rule['indicatorA'], rule['paramA'])
-                        
-                        # Calculate Right Side (e.g. EMA 21)
                         val_b = self.calculate_indicator_value(df, rule['indicatorB'], rule['paramB'])
-                        
                         op = rule['operator']
                         
-                        # Construct Log Message for Debugging
-                        # e.g. "Rule: EMA(9) 50000 > EMA(21) 49000"
                         log_msg = f"Rule: {rule['indicatorA']}({rule['paramA']}) {val_a:.2f} {op} {rule['indicatorB']}({rule['paramB']}) {val_b:.2f}"
                         
-                        # Logic Check
                         condition_met = False
-                        if op in [">", "Greater Than"]:
-                            condition_met = val_a > val_b
-                        elif op in ["<", "Less Than"]:
-                            condition_met = val_a < val_b
-                        elif op == "==":
-                            condition_met = val_a == val_b
-                        elif op == "CROSS_UP":
-                            # Simple cross logic for now (current > prev)
-                            # Full implementation requires storing previous state
-                            condition_met = val_a > val_b 
+                        if op in [">", "Greater Than"]: condition_met = val_a > val_b
+                        elif op in ["<", "Less Than"]: condition_met = val_a < val_b
+                        elif op == "==": condition_met = val_a == val_b
                             
                         if condition_met:
                             self.log(f"✅ Condition Met: {log_msg}")
                             should_buy = True 
                         else:
-                            # Heartbeat log (Only show every ~10 seconds to avoid spam)
                             if datetime.now().second % 10 == 0:
                                 self.log(f"👀 Monitoring: {log_msg}")
 
-                    # --- STEP 3: EXECUTE TRADE ---
+                    # 4. EXECUTE TRADE (With Size Calculation)
                     if should_buy:
-                        self.log(f"⚡ EXECUTING BUY: {self.symbol} @ {current_price}")
+                        # --- FIX: CALCULATE VALID QUANTITY ---
+                        # Target size: $15 USD (Safe minimum for most exchanges)
+                        target_usdt_value = 15.0
+                        qty = target_usdt_value / current_price
                         
-                        # Safe quantity for testing
-                        qty = 0.001 if "BTC" in self.symbol else 0.01 
+                        # Rounding logic (Crucial for crypto)
+                        # BTC usually needs 3 decimals, XRP needs 0 or 1. 
+                        if "BTC" in self.symbol: qty = round(qty, 3)
+                        elif "ETH" in self.symbol: qty = round(qty, 2)
+                        elif "XRP" in self.symbol or "DOGE" in self.symbol: qty = int(qty)
+                        else: qty = round(qty, 2)
+
+                        self.log(f"⚡ SENDING BUY: {qty} {self.symbol} (~${target_usdt_value})")
                         
                         order = self.broker.place_order(self.symbol, "buy", qty)
                         
                         if isinstance(order, dict) and "error" in order:
-                            self.log(f"❌ Order Failed: {order.get('message', 'Unknown Error')}")
+                            self.log(f"❌ Rejected: {order.get('message', order)}")
                         else:
+                            # Print full details to debug
                             order_id = order.get('id', 'Unknown')
-                            self.log(f"🎉 ORDER SUCCESS! ID: {order_id}")
+                            status = order.get('status', 'Unknown')
+                            self.log(f"🎉 ORDER SENT! ID: {order_id} | Status: {status}")
                         
-                        # Wait 1 minute before checking again to avoid double-buying on the same candle
                         await asyncio.sleep(60) 
 
                 else:
-                    self.log("⚠️ Engine Idle: Please Connect Broker in Settings.")
+                    self.log("⚠️ Engine Idle: Connect Broker.")
                     await asyncio.sleep(10)
 
             except Exception as e:
-                self.log(f"🔥 Critical Error: {str(e)}")
+                self.log(f"🔥 Error: {str(e)}")
                 traceback.print_exc()
                 await asyncio.sleep(5)
 
-            # Standard Tick Speed (Check every 3 seconds)
             await asyncio.sleep(3)
 
     def stop(self):

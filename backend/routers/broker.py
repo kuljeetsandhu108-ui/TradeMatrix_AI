@@ -88,12 +88,13 @@ import ccxt
 from engine.broker_interface import BrokerClient # Import our robust client
 
 # 4. GET LIVE POSITIONS & BALANCE
+# ... (imports) ...
+
 @router.get("/positions")
 def get_live_positions(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    # Find active broker credentials
     cred = db.query(models.BrokerCredential).filter(
         models.BrokerCredential.user_id == current_user.id,
         models.BrokerCredential.is_active == True
@@ -103,50 +104,49 @@ def get_live_positions(
         return {"status": "error", "message": "No broker connected"}
 
     try:
-        # USE OUR ROBUST BROKER CLIENT (Instead of raw CCXT)
-        # This ensures we respect the Testnet/Mainnet settings defined in broker_interface.py
-        client = BrokerClient(
-            broker_name=cred.broker_name,
-            api_key=cred.client_id,
-            secret_key=cred.api_key
-        )
+        # Use our Broker Interface
+        from engine.broker_interface import BrokerClient
+        client = BrokerClient(cred.broker_name, cred.client_id, cred.api_key)
         
-        exchange = client.exchange
-        
-        # 1. Fetch Balance
-        balance = exchange.fetch_balance()
-        total_usdt = balance['total'].get('USDT', 0.0)
-        
-        # 2. Fetch Positions
+        # 1. Balance
+        balance = 0.0
+        try:
+            bal_data = client.exchange.fetch_balance()
+            balance = bal_data.get('total', {}).get('USDT', 0.0)
+        except:
+            print("Balance fetch error (non-critical)")
+
+        # 2. Positions
         positions = []
         try:
-            # Delta/CoinDCX usually require specific params for positions
-            raw_positions = exchange.fetch_positions()
+            # fetch_positions might fail if exchange doesn't support it well
+            raw_pos = client.exchange.fetch_positions()
             
-            for p in raw_positions:
-                # Filter for active positions (size > 0)
-                size = float(p.get('contracts', 0)) or float(p['info'].get('size', 0))
-                
-                if size > 0:
-                    positions.append({
-                        "symbol": p['symbol'],
-                        "side": p['side'], 
-                        "size": size,
-                        "entry_price": float(p['entryPrice']),
-                        "market_price": float(p.get('markPrice', p['entryPrice'])), # Fallback if markPrice missing
-                        "pnl": float(p['unrealizedPnl'])
-                    })
-        except Exception as pos_error:
-            print(f"Position Parse Error: {pos_error}")
-            # Don't crash the whole endpoint if just positions fail, return balance at least
-            pass
-
+            # Safe Parsing loop
+            if raw_pos:
+                for p in raw_pos:
+                    # Extract size safely
+                    size = float(p.get('contracts', 0)) or float(p.get('info', {}).get('size', 0))
+                    
+                    if size > 0: # Only show active trades
+                        positions.append({
+                            "symbol": p.get('symbol', 'Unknown'),
+                            "side": p.get('side', 'long'),
+                            "size": size,
+                            "entry_price": float(p.get('entryPrice', 0)),
+                            "market_price": float(p.get('markPrice', 0)),
+                            "pnl": float(p.get('unrealizedPnl', 0))
+                        })
+        except Exception as pos_err:
+            print(f"Position Error: {pos_err}")
+            # Do NOT crash. Return empty list instead.
+            
         return {
             "status": "success",
-            "balance": total_usdt,
+            "balance": balance,
             "positions": positions
         }
 
     except Exception as e:
-        print(f"Broker API Error: {e}")
-        return {"status": "error", "message": f"Failed to fetch data: {str(e)}"}
+        print(f"Broker API Fatal Error: {e}")
+        return {"status": "error", "message": str(e)}
