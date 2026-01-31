@@ -8,12 +8,15 @@ class BrokerClient:
         self.broker_name = broker_name.lower().strip()
         
         # --- SETTINGS ---
-        self.IS_TESTNET = True # Keep this True for your Demo testing
+        # 🔴 REAL MONEY MODE ENABLED 🔴
+        self.IS_TESTNET = False 
         
-        print(f"🔧 Mode: {'TESTNET' if self.IS_TESTNET else 'REAL'}")
+        print(f"🔧 System Check: CCXT Version {ccxt.__version__}")
+        print(f"🔧 Mode: {'TESTNET/DEMO' if self.IS_TESTNET else 'REAL MONEY'}")
 
         # 2. CHECK SUPPORT
         if self.broker_name not in ccxt.exchanges:
+            print(f"❌ Error: '{self.broker_name}' not found in CCXT.")
             raise ValueError(f"Exchange '{self.broker_name}' not supported.")
 
         # 3. INITIALIZE EXCHANGE
@@ -29,15 +32,14 @@ class BrokerClient:
             
             self.exchange = exchange_class(config)
             
-            # --- ENABLE TESTNET ---
+            # --- ENABLE TESTNET (IF TRUE) ---
             if self.IS_TESTNET:
                 if 'test' in self.exchange.urls:
                     self.exchange.urls['api'] = self.exchange.urls['test']
                 else:
                     self.exchange.set_sandbox_mode(True)
             
-            # --- CRITICAL FIX: LOAD MARKETS ---
-            # This downloads the symbol map (SOL/USDT -> SOLUSDT)
+            # --- LOAD MARKETS (Crucial for Symbol Mapping) ---
             print(f"Loading markets for {self.broker_name}...")
             self.exchange.load_markets()
             print("✅ Markets Loaded.")
@@ -51,12 +53,12 @@ class BrokerClient:
             ticker = self.exchange.fetch_ticker(symbol)
             return ticker['last']
         except Exception as e:
-            print(f"Price Error: {e}")
+            print(f"Price Fetch Error ({self.broker_name}): {e}")
             return None
 
     def get_historical_data(self, symbol, timeframe, limit=100):
         try:
-            # CCXT will now auto-map 'symbol' to the correct API ID
+            # CCXT handles the mapping from 'BTC/USDT' to the exchange specific ID
             candles = self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
             
             if not candles:
@@ -67,15 +69,14 @@ class BrokerClient:
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
             return df
         except Exception as e:
-            # This print will show up in your Railway logs if you check them
-            print(f"❌ History Error ({self.broker_name} - {symbol}): {e}")
+            print(f"History Error ({self.broker_name}): {e}")
             return pd.DataFrame()
 
     def place_order(self, symbol, side, qty):
         try:
-            print(f"⚡ Sending {side} order for {qty} {symbol}...")
+            print(f"⚡ Sending REAL {side} order for {qty} {symbol}...")
             order = self.exchange.create_order(symbol, 'market', side.lower(), qty)
             return order
         except Exception as e:
-            print(f"Order Error: {e}")
+            print(f"Order Error ({self.broker_name}): {e}")
             return {"status": "error", "message": str(e)}
