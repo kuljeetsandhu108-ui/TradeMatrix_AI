@@ -5,6 +5,7 @@ import models
 import pandas_ta as ta
 from engine.broker_interface import BrokerClient
 import traceback
+import ccxt # Import CCXT to check version and availability
 
 # Global memory to track running bots
 active_bots = {}
@@ -21,7 +22,7 @@ class TradeBot:
         self.symbol = self.strategy.symbol # e.g., "BTC/USDT"
         
         # 2. Load User's API Keys
-        # We look for ANY active broker connection for this user (CoinDCX or Delta)
+        # We look for ANY active broker connection for this user
         self.cred = db.query(models.BrokerCredential).filter(
             models.BrokerCredential.user_id == self.strategy.user_id,
             models.BrokerCredential.is_active == True
@@ -29,15 +30,30 @@ class TradeBot:
         
         self.broker = None
         
+        # --- DEBUGGING LOGS (Visible in Frontend Terminal) ---
+        # This will help us diagnose the Railway Environment
+        self.log(f"🔍 System Check: CCXT Version {ccxt.__version__}")
+        
         if self.cred:
+            broker_name_clean = self.cred.broker_name.lower().strip()
+            
+            # Check if this broker actually exists in the library
+            if broker_name_clean in ccxt.exchanges:
+                self.log(f"✅ Crypto Driver: {broker_name_clean} is AVAILABLE.")
+            else:
+                self.log(f"❌ Crypto Driver: {broker_name_clean} is MISSING from this version.")
+                # Find similar names to help debug
+                similar = [e for e in ccxt.exchanges if 'coin' in e or 'delta' in e][:5]
+                self.log(f"ℹ️ Did you mean: {similar}?")
+
             try:
-                # Initialize CCXT Connection
+                # Initialize CCXT Connection via BrokerClient wrapper
                 self.broker = BrokerClient(
                     broker_name=self.cred.broker_name,
-                    api_key=self.cred.client_id, # We stored API Key in 'client_id' column
-                    secret_key=self.cred.api_key # We stored Secret in 'api_key' column
+                    api_key=self.cred.client_id, # Stored as client_id
+                    secret_key=self.cred.api_key # Stored as api_key
                 )
-                self.log(f"✅ Connected to {self.cred.broker_name} successfully")
+                self.log(f"✅ Connected to {self.cred.broker_name} API successfully")
             except Exception as e:
                 self.log(f"❌ Broker Connection Failed: {str(e)}")
         else:
@@ -80,7 +96,6 @@ class TradeBot:
                         
                     # --- STEP 2: CALCULATE INDICATORS ---
                     # (Hardcoded Logic Example: EMA Crossover)
-                    # In a future update, we will parse the JSON 'logic_configuration' dynamically
                     
                     df['ema_9'] = ta.ema(df['close'], length=9)
                     df['ema_21'] = ta.ema(df['close'], length=21)
@@ -100,8 +115,6 @@ class TradeBot:
                         self.log(f"🟢 BUY SIGNAL: EMA9 ({ema_9:.2f}) > EMA21 ({ema_21:.2f})")
                         
                         # EXECUTE TRADE
-                        # Qty is hardcoded to a safe small amount for testing
-                        # For CoinDCX/Delta, make sure this meets minimum order size
                         qty = 0.001 if "BTC" in self.symbol else 0.01 
                         
                         order = self.broker.place_order(self.symbol, "buy", qty)
