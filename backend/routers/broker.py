@@ -84,12 +84,16 @@ def delete_broker(
 import ccxt
 
 # 4. GET LIVE POSITIONS & BALANCE
+# ... (keep existing imports) ...
+from engine.broker_interface import BrokerClient # Import our robust client
+
+# 4. GET LIVE POSITIONS & BALANCE
 @router.get("/positions")
 def get_live_positions(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    # Find the active broker
+    # Find active broker credentials
     cred = db.query(models.BrokerCredential).filter(
         models.BrokerCredential.user_id == current_user.id,
         models.BrokerCredential.is_active == True
@@ -99,39 +103,42 @@ def get_live_positions(
         return {"status": "error", "message": "No broker connected"}
 
     try:
-        # Initialize Exchange
-        broker_name = cred.broker_name.lower().strip()
-        exchange_class = getattr(ccxt, broker_name)
-        exchange = exchange_class({
-            'apiKey': cred.client_id,
-            'secret': cred.api_key,
-            'options': {'defaultType': 'future'} # Important for Delta
-        })
-
-        # Fetch Balance
+        # USE OUR ROBUST BROKER CLIENT (Instead of raw CCXT)
+        # This ensures we respect the Testnet/Mainnet settings defined in broker_interface.py
+        client = BrokerClient(
+            broker_name=cred.broker_name,
+            api_key=cred.client_id,
+            secret_key=cred.api_key
+        )
+        
+        exchange = client.exchange
+        
+        # 1. Fetch Balance
         balance = exchange.fetch_balance()
         total_usdt = balance['total'].get('USDT', 0.0)
         
-        # Fetch Positions (For Futures/Derivatives)
-        # Note: Some exchanges use fetch_positions, others use fetch_positions_risk
+        # 2. Fetch Positions
         positions = []
         try:
+            # Delta/CoinDCX usually require specific params for positions
             raw_positions = exchange.fetch_positions()
-            # Filter only active positions (size > 0)
-            positions = [
-                {
-                    "symbol": p['symbol'],
-                    "side": p['side'], # long/short
-                    "size": float(p['contracts']) if 'contracts' in p else float(p['info'].get('size', 0)),
-                    "entry_price": float(p['entryPrice']),
-                    "market_price": float(p['markPrice']) if 'markPrice' in p else 0.0,
-                    "pnl": float(p['unrealizedPnl'])
-                }
-                for p in raw_positions if float(p['contracts']) > 0 or float(p['info'].get('size', 0)) > 0
-            ]
-        except:
-            # Fallback for Spot Markets (Simulate positions from balance)
-            # This is complex, so we return empty if futures fetch fails for now
+            
+            for p in raw_positions:
+                # Filter for active positions (size > 0)
+                size = float(p.get('contracts', 0)) or float(p['info'].get('size', 0))
+                
+                if size > 0:
+                    positions.append({
+                        "symbol": p['symbol'],
+                        "side": p['side'], 
+                        "size": size,
+                        "entry_price": float(p['entryPrice']),
+                        "market_price": float(p.get('markPrice', p['entryPrice'])), # Fallback if markPrice missing
+                        "pnl": float(p['unrealizedPnl'])
+                    })
+        except Exception as pos_error:
+            print(f"Position Parse Error: {pos_error}")
+            # Don't crash the whole endpoint if just positions fail, return balance at least
             pass
 
         return {
@@ -141,5 +148,5 @@ def get_live_positions(
         }
 
     except Exception as e:
-        print(f"Position Fetch Error: {e}")
-        return {"status": "error", "message": "Failed to fetch positions"}
+        print(f"Broker API Error: {e}")
+        return {"status": "error", "message": f"Failed to fetch data: {str(e)}"}
