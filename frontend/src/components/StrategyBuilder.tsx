@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { X, Plus, Save, Trash2, PlayCircle, Activity, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
-import api from "../utils/api"; // <--- CHANGED: Using our smart API helper instead of axios
+import api from "../utils/api"; // <--- Using Secure API Helper
 
 // --- Types for Type Safety ---
 interface BuilderProps {
@@ -20,7 +20,8 @@ interface ConditionRow {
 export default function StrategyBuilder({ onClose }: BuilderProps) {
   // --- STATE MANAGEMENT ---
   const [name, setName] = useState("");
-  const [symbol, setSymbol] = useState("NIFTY 50");
+  // Default to Crypto Pair
+  const [symbol, setSymbol] = useState("BTC/USDT"); 
   const [timeframe, setTimeframe] = useState("5m");
   const [isDeploying, setIsDeploying] = useState(false); // Loading state
   
@@ -52,7 +53,7 @@ export default function StrategyBuilder({ onClose }: BuilderProps) {
     ));
   };
 
-  // 4. SAVE & DEPLOY TO BACKEND (Authenticated)
+  // 4. SAVE & DEPLOY TO BACKEND (Authenticated & Cloud Ready)
   const handleSave = async () => {
     // Basic Validation
     if (!name) return alert("Please give your strategy a name.");
@@ -60,26 +61,26 @@ export default function StrategyBuilder({ onClose }: BuilderProps) {
     setIsDeploying(true);
 
     try {
-      // The Payload
+      // The Payload matching our Python Schema
       const payload = {
         name: name,
         symbol: symbol,
         timeframe: timeframe,
         conditions: conditions,
-        // user_id is NO LONGER needed here, the Backend extracts it from the Token!
+        // user_id is extracted from the Token by the backend automatically
       };
 
-      // --- USING SMART API HELPER ---
-      // This automatically adds the "Authorization: Bearer <token>" header
+      // --- SEND TO BACKEND ---
+      // Using 'api' helper handles Authentication and Cloud URL automatically
       const response = await api.post("/api/v1/strategy/create", payload);
 
       if (response.data.status === "success") {
-        onClose(); // Close the modal to trigger the refresh
+        onClose(); // Close the modal to trigger the dashboard refresh
       }
 
     } catch (error) {
       console.error("Deployment Error:", error);
-      alert("❌ Deployment Failed. Session might be expired. Try logging in again.");
+      alert("❌ Deployment Failed. Check if Backend is running.");
     } finally {
       setIsDeploying(false);
     }
@@ -101,9 +102,9 @@ export default function StrategyBuilder({ onClose }: BuilderProps) {
         <div className="flex items-center justify-between p-6 border-b border-[#2A2A2A] bg-[#1a1d23]">
           <div>
             <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-              <Activity className="text-primary" /> Create New Algorithm
+              <Activity className="text-primary" /> Create Crypto Bot
             </h2>
-            <p className="text-gray-400 text-sm">Define your entry and exit logic using the matrix.</p>
+            <p className="text-gray-400 text-sm">Define 24/7 automated logic for crypto markets.</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition">
             <X size={24} />
@@ -121,27 +122,27 @@ export default function StrategyBuilder({ onClose }: BuilderProps) {
               <label className="text-xs font-mono text-gray-500 uppercase tracking-wider">Strategy Name</label>
               <input 
                 type="text" 
-                placeholder="e.g. Ayush 1" 
+                placeholder="e.g. BTC Trend Follower" 
                 className="w-full bg-[#050505] border border-[#2A2A2A] rounded-lg p-3 text-white focus:border-primary focus:outline-none transition placeholder:text-gray-700 font-medium"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
             </div>
 
-            {/* Instrument Select */}
+            {/* Instrument Select (UPDATED FOR CRYPTO) */}
             <div className="space-y-2">
-              <label className="text-xs font-mono text-gray-500 uppercase tracking-wider">Instrument</label>
+              <label className="text-xs font-mono text-gray-500 uppercase tracking-wider">Asset Pair</label>
               <select 
                 value={symbol}
                 onChange={(e) => setSymbol(e.target.value)}
                 className="w-full bg-[#050505] border border-[#2A2A2A] rounded-lg p-3 text-white focus:border-primary focus:outline-none appearance-none font-mono"
               >
-                <option>NIFTY 50</option>
-                <option>BANKNIFTY</option>
-                <option>FINNIFTY</option>
-                <option>RELIANCE</option>
-                <option>HDFCBANK</option>
-                <option>INFY</option>
+                <option value="BTC/USDT">BTC/USDT</option>
+                <option value="ETH/USDT">ETH/USDT</option>
+                <option value="SOL/USDT">SOL/USDT</option>
+                <option value="XRP/USDT">XRP/USDT</option>
+                <option value="DOGE/USDT">DOGE/USDT</option>
+                <option value="BNB/USDT">BNB/USDT</option>
               </select>
             </div>
 
@@ -149,7 +150,7 @@ export default function StrategyBuilder({ onClose }: BuilderProps) {
             <div className="space-y-2">
               <label className="text-xs font-mono text-gray-500 uppercase tracking-wider">Timeframe</label>
               <div className="flex bg-[#050505] rounded-lg border border-[#2A2A2A] p-1">
-                {["1m", "5m", "15m", "1H"].map((tf) => (
+                {["1m", "5m", "15m", "1H", "4H"].map((tf) => (
                   <button 
                     key={tf}
                     onClick={() => setTimeframe(tf)}

@@ -13,4 +13,4 @@ google-auth-oauthlib
 google-auth-httplib2
 pyjwt
 cryptography
-fyers-apiv3
+ccxt  <-- NEW ADDITION

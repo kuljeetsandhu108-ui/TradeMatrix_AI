@@ -1,88 +1,62 @@
-from fyers_apiv3 import fyersModel
+import ccxt
 import pandas as pd
-import datetime
+import time
 
 class BrokerClient:
-    def __init__(self, client_id, access_token):
-        self.client_id = client_id
-        self.access_token = access_token
+    def __init__(self, broker_name, api_key, secret_key):
+        self.broker_name = broker_name.lower()
         
-        # Initialize Fyres SDK
-        self.fyers = fyersModel.FyersModel(
-            client_id=self.client_id, 
-            token=self.access_token,
-            is_async=False, 
-            log_path=""
-        )
+        # Initialize the specific exchange class dynamically
+        # ccxt.delta(), ccxt.coindcx(), ccxt.binance()
+        if hasattr(ccxt, self.broker_name):
+            exchange_class = getattr(ccxt, self.broker_name)
+            self.exchange = exchange_class({
+                'apiKey': api_key,
+                'secret': secret_key,
+                'enableRateLimit': True,
+                'options': {'defaultType': 'future'} # Default to Futures for Delta
+            })
+        else:
+            raise ValueError(f"Exchange {broker_name} not supported")
 
     def get_market_price(self, symbol):
         """
-        Fetches the current market price (LTP).
-        Symbol format for Fyres: "NSE:NIFTY50-INDEX" or "NSE:SBIN-EQ"
+        Fetches LTP for Crypto.
+        Symbol format: "BTC/USDT"
         """
-        data = {
-            "symbols": symbol
-        }
         try:
-            response = self.fyers.quotes(data=data)
-            if 'd' in response and len(response['d']) > 0:
-                return response['d'][0]['v']['lp'] # Last Traded Price
-            return None
+            ticker = self.exchange.fetch_ticker(symbol)
+            return ticker['last']
         except Exception as e:
-            print(f"Error fetching price: {e}")
+            print(f"Price Fetch Error: {e}")
             return None
 
-    def get_historical_data(self, symbol, timeframe, duration_days=5):
+    def get_historical_data(self, symbol, timeframe, limit=100):
         """
-        Fetches candle data to calculate indicators (EMA, RSI).
+        Fetches OHLCV data.
+        Timeframe: '1m', '5m', '1h', '1d'
         """
-        # Map timeframe "5m" to Fyres format
-        tf_map = {"1m": "1", "5m": "5", "15m": "15", "1H": "60"}
-        
-        today = datetime.date.today()
-        start_date = today - datetime.timedelta(days=duration_days)
-        
-        data = {
-            "symbol": symbol,
-            "resolution": tf_map.get(timeframe, "5"),
-            "date_format": "1",
-            "range_from": start_date.strftime("%Y-%m-%d"),
-            "range_to": today.strftime("%Y-%m-%d"),
-            "cont_flag": "1"
-        }
-
         try:
-            response = self.fyers.history(data=data)
-            if 'candles' in response:
-                df = pd.DataFrame(response['candles'])
-                df.columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
-                return df
-            return pd.DataFrame()
+            # CCXT unifies this call for all exchanges
+            candles = self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
+            
+            # Convert to DataFrame
+            df = pd.DataFrame(candles, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+            return df
         except Exception as e:
             print(f"History Error: {e}")
             return pd.DataFrame()
 
-    def place_order(self, symbol, side, qty=1):
+    def place_order(self, symbol, side, qty):
         """
-        Executes a real trade.
-        side: 1 (Buy), -1 (Sell)
+        Executes a Crypto Order.
+        Side: 'buy' or 'sell'
         """
-        order_data = {
-            "symbol": symbol,
-            "qty": qty,
-            "type": 2, # Market Order
-            "side": 1 if side == "BUY" else -1,
-            "productType": "INTRADAY",
-            "limitPrice": 0,
-            "stopPrice": 0,
-            "validity": "DAY",
-            "disclosedQty": 0,
-            "offlineOrder": False,
-        }
-
         try:
-            response = self.fyers.place_order(data=order_data)
-            return response
+            # Create a Market Order
+            order = self.exchange.create_order(symbol, 'market', side.lower(), qty)
+            return order
         except Exception as e:
-            print(f"Order Placement Error: {e}")
+            print(f"Order Error: {e}")
             return {"status": "error", "message": str(e)}
