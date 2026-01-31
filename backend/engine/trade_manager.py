@@ -148,14 +148,13 @@ class TradeBot:
                                 self.log(f"👀 Monitoring: {log_msg}")
 
                     # 4. EXECUTE TRADE (With Size Calculation)
+                    # 4. EXECUTE TRADE
                     if should_buy:
-                        # --- FIX: CALCULATE VALID QUANTITY ---
-                        # Target size: $15 USD (Safe minimum for most exchanges)
+                        # --- CALCULATE QUANTITY (~$15 USDT) ---
                         target_usdt_value = 15.0
                         qty = target_usdt_value / current_price
                         
-                        # Rounding logic (Crucial for crypto)
-                        # BTC usually needs 3 decimals, XRP needs 0 or 1. 
+                        # Rounding logic specific to coins
                         if "BTC" in self.symbol: qty = round(qty, 3)
                         elif "ETH" in self.symbol: qty = round(qty, 2)
                         elif "XRP" in self.symbol or "DOGE" in self.symbol: qty = int(qty)
@@ -163,14 +162,21 @@ class TradeBot:
 
                         self.log(f"⚡ SENDING BUY: {qty} {self.symbol} (~${target_usdt_value})")
                         
+                        # Send Order
                         order = self.broker.place_order(self.symbol, "buy", qty)
                         
-                        if isinstance(order, dict) and "error" in order:
-                            self.log(f"❌ Rejected: {order.get('message', order)}")
+                        # --- CRITICAL FIX: CHECK FOR STATUS ERROR ---
+                        # We check if 'error' key exists OR if 'status' is 'error'
+                        if (isinstance(order, dict) and "error" in order) or (isinstance(order, dict) and order.get("status") == "error"):
+                            reason = order.get('message') or order.get('error') or "Unknown Reason"
+                            self.log(f"❌ CRITICAL FAILURE: {reason}")
                         else:
-                            # Print full details to debug
                             order_id = order.get('id', 'Unknown')
-                            status = order.get('status', 'Unknown')
+                            status = order.get('status', 'Filled')
+                            self.log(f"🎉 ORDER SUCCESS! ID: {order_id} | Status: {status}")
+                        
+                        await asyncio.sleep(60) # Wait 1 min to avoid double buying
+                        
                             self.log(f"🎉 ORDER SENT! ID: {order_id} | Status: {status}")
                         
                         await asyncio.sleep(60) 
