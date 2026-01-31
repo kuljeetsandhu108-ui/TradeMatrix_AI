@@ -1,5 +1,5 @@
 "use client";
-
+import LivePositions from "../../components/LivePositions";
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import api from "../../utils/api"; // <--- CHANGED FROM AXIOS TO API HELPER
@@ -118,11 +118,11 @@ export default function Dashboard() {
              </button>
              <div className="flex flex-col">
                 <h2 className="text-sm md:text-lg font-bold text-white flex items-center gap-2">
-                  NSE Engine <span className="px-2 py-0.5 rounded text-[10px] bg-primary/20 text-primary border border-primary/30 hidden md:inline-block">LIVE</span>
+                  Crypto Engine <span className="px-2 py-0.5 rounded text-[10px] bg-primary/20 text-primary border border-primary/30 hidden md:inline-block">LIVE</span>
                 </h2>
                 <div className="flex items-center gap-2 text-[10px] md:text-xs text-text-dim font-mono">
                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
-                   NIFTY: <span className="text-white">21,456.30</span>
+                   BTC/USDT: <span className="text-white">21,456.30</span>
                 </div>
              </div>
           </div>
@@ -160,7 +160,7 @@ export default function Dashboard() {
                    </div>
                 </div>
               )}
-              {activeTab === "positions" && <PlaceholderView title="Live Positions" />}
+              {activeTab === "positions" && <LivePositions />}
               {activeTab === "settings" && <BrokerConfig />} 
            </div>
            

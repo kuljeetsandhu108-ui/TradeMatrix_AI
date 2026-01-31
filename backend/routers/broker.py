@@ -79,3 +79,67 @@ def delete_broker(
     db.commit()
     
     return {"status": "success", "message": f"Deleted {broker_name} keys"}
+
+# ... (keep existing imports and code) ...
+import ccxt
+
+# 4. GET LIVE POSITIONS & BALANCE
+@router.get("/positions")
+def get_live_positions(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    # Find the active broker
+    cred = db.query(models.BrokerCredential).filter(
+        models.BrokerCredential.user_id == current_user.id,
+        models.BrokerCredential.is_active == True
+    ).first()
+
+    if not cred:
+        return {"status": "error", "message": "No broker connected"}
+
+    try:
+        # Initialize Exchange
+        broker_name = cred.broker_name.lower().strip()
+        exchange_class = getattr(ccxt, broker_name)
+        exchange = exchange_class({
+            'apiKey': cred.client_id,
+            'secret': cred.api_key,
+            'options': {'defaultType': 'future'} # Important for Delta
+        })
+
+        # Fetch Balance
+        balance = exchange.fetch_balance()
+        total_usdt = balance['total'].get('USDT', 0.0)
+        
+        # Fetch Positions (For Futures/Derivatives)
+        # Note: Some exchanges use fetch_positions, others use fetch_positions_risk
+        positions = []
+        try:
+            raw_positions = exchange.fetch_positions()
+            # Filter only active positions (size > 0)
+            positions = [
+                {
+                    "symbol": p['symbol'],
+                    "side": p['side'], # long/short
+                    "size": float(p['contracts']) if 'contracts' in p else float(p['info'].get('size', 0)),
+                    "entry_price": float(p['entryPrice']),
+                    "market_price": float(p['markPrice']) if 'markPrice' in p else 0.0,
+                    "pnl": float(p['unrealizedPnl'])
+                }
+                for p in raw_positions if float(p['contracts']) > 0 or float(p['info'].get('size', 0)) > 0
+            ]
+        except:
+            # Fallback for Spot Markets (Simulate positions from balance)
+            # This is complex, so we return empty if futures fetch fails for now
+            pass
+
+        return {
+            "status": "success",
+            "balance": total_usdt,
+            "positions": positions
+        }
+
+    except Exception as e:
+        print(f"Position Fetch Error: {e}")
+        return {"status": "error", "message": "Failed to fetch positions"}
