@@ -4,26 +4,36 @@ import time
 
 class BrokerClient:
     def __init__(self, broker_name, api_key, secret_key):
-        # 1. CLEAN THE NAME (Remove spaces, lowercase)
+        # 1. CLEAN THE NAME
         self.broker_name = broker_name.lower().strip()
         
-        # 2. CHECK SUPPORT
-        if not hasattr(ccxt, self.broker_name):
-            # Debugging: Print similar exchanges if exact match fails
-            print(f"❌ Error: '{self.broker_name}' not found in CCXT.")
-            raise ValueError(f"Exchange '{self.broker_name}' not supported. Check spelling.")
+        # --- DEBUGGING BLOCK ---
+        print(f"🔧 System CCXT Version: {ccxt.__version__}")
+        print(f"🔧 Trying to load: '{self.broker_name}'")
+        
+        # Check if exchange is in the official list
+        if self.broker_name not in ccxt.exchanges:
+            print(f"❌ '{self.broker_name}' is NOT in ccxt.exchanges list.")
+            # Print similar exchanges to help debug
+            similar = [e for e in ccxt.exchanges if 'coin' in e or 'delta' in e]
+            print(f"💡 Did you mean one of these? {similar}")
+            raise ValueError(f"Exchange '{self.broker_name}' not supported by this CCXT version.")
+        # -----------------------
 
-        # 3. INITIALIZE EXCHANGE
+        # 2. INITIALIZE EXCHANGE
         try:
             exchange_class = getattr(ccxt, self.broker_name)
             self.exchange = exchange_class({
                 'apiKey': api_key,
                 'secret': secret_key,
                 'enableRateLimit': True,
-                'options': {'defaultType': 'future'} # Default to futures if available
+                'options': {'defaultType': 'future'} # Default to futures
             })
-            # Some exchanges require loading markets first
-            # self.exchange.load_markets() 
+            
+            # 3. TEST CONNECTION (Optional but good)
+            # This ensures keys are valid before starting the bot loop
+            # self.exchange.fetch_balance() 
+            
         except Exception as e:
             print(f"❌ Init Error: {e}")
             raise ValueError(f"Failed to initialize {self.broker_name}: {e}")
@@ -48,7 +58,7 @@ class BrokerClient:
 
     def place_order(self, symbol, side, qty):
         try:
-            # CoinDCX/Delta specific adjustments could go here
+            # Create a Market Order
             order = self.exchange.create_order(symbol, 'market', side.lower(), qty)
             return order
         except Exception as e:

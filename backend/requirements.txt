@@ -13,4 +13,4 @@ google-auth-oauthlib
 google-auth-httplib2
 pyjwt
 cryptography
-ccxt>=4.0.0
+ccxt>=4.2.19
