@@ -4,14 +4,14 @@ import time
 
 class BrokerClient:
     def __init__(self, broker_name, api_key, secret_key):
+        # 1. CLEAN THE NAME
         self.broker_name = broker_name.lower().strip()
         
-        # 🔴 CRITICAL SETTING: REAL MONEY MODE 🔴
-        # Must be FALSE for Live Trading
+        # 🔴 REAL MONEY MODE 🔴
         self.IS_TESTNET = False 
         
         print(f"🔧 System Check: CCXT Version {ccxt.__version__}")
-        print(f"🔧 Target: {'TESTNET (DEMO)' if self.IS_TESTNET else 'MAINNET (REAL MONEY)'}")
+        print(f"🔧 Target: {'TESTNET' if self.IS_TESTNET else 'MAINNET'}")
 
         if self.broker_name not in ccxt.exchanges:
             raise ValueError(f"Exchange '{self.broker_name}' not supported.")
@@ -28,29 +28,32 @@ class BrokerClient:
             
             self.exchange = exchange_class(config)
             
-            # FORCE REAL URLS (Just to be absolutely safe)
-            if not self.IS_TESTNET:
-                # Ensure we are pointing to the live server
-                if self.broker_name == 'delta':
-                    self.exchange.urls['api'] = 'https://api.delta.exchange'
+            # --- BUG FIX: DO NOT MANUALLY OVERWRITE URLS ---
+            # CCXT defaults to the correct Mainnet URL automatically.
+            # We only touch this if we are in Testnet mode.
             
             if self.IS_TESTNET:
                 self.exchange.set_sandbox_mode(True)
             
             # --- CONNECTION TEST ---
-            # We try to fetch the balance immediately. 
-            # If this fails, we KNOW the keys/IP are wrong.
             print(f"🕵️ Testing connection to {self.broker_name}...")
+            
+            # Try to fetch balance. If keys are wrong, this throws an error.
             self.exchange.fetch_balance() 
             print("✅ Connection Verified! Keys are valid.")
             
-            # Load Markets for symbol mapping
+            # Load Markets (Crucial for symbol mapping)
             self.exchange.load_markets()
             
         except Exception as e:
             print(f"❌ Connection Error: {e}")
-            # We raise the error so the frontend knows immediately
-            raise ValueError(f"Invalid API Keys or IP blocked by Delta: {e}")
+            # Raise clear error for Frontend
+            if "AuthenticationError" in str(e) or "401" in str(e):
+                raise ValueError("Invalid API Key or Secret. Please check your credentials.")
+            elif "string indices" in str(e):
+                raise ValueError(f"CCXT Configuration Error: {e}")
+            else:
+                raise ValueError(f"Connection Failed: {e}")
 
     def get_market_price(self, symbol):
         try:
