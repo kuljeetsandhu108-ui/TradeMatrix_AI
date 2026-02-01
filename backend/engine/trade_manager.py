@@ -18,20 +18,29 @@ class TradeBot:
         self.is_active = True
         self.logs = []
         
-        # 1. Load Strategy Details
+        # 1. Load Strategy Details from Database
         self.strategy = db.query(models.Strategy).filter(models.Strategy.id == strategy_id).first()
         self.symbol = self.strategy.symbol 
         
-        # 2. Parse Logic Rules (JSON)
-        # Handles cases where data might be a string or a dictionary
+        # 2. Parse Logic & Quantity
+        # The logic_configuration stores both the Rules and the Quantity
         raw_logic = self.strategy.logic_configuration
+        
+        # Handle case where Postgres stores it as a string instead of JSON dict
         if isinstance(raw_logic, str):
             try:
                 raw_logic = json.loads(raw_logic)
             except:
                 raw_logic = {}
-            
+        
+        # Extract the Rules List
         self.rules = raw_logic.get("rules", [])
+        
+        # Extract the User-Defined Quantity (Default to 0.001 if missing for safety)
+        try:
+            self.trade_qty = float(raw_logic.get("quantity", 0.001))
+        except:
+            self.trade_qty = 0.001
         
         # 3. Load User Credentials
         # We find keys belonging to the USER who owns this strategy
@@ -51,6 +60,7 @@ class TradeBot:
                     secret_key=self.cred.api_key
                 )
                 self.log(f"✅ Broker Ready: {self.cred.broker_name.upper()}")
+                self.log(f"💰 Trading Size Set To: {self.trade_qty} {self.symbol.split('/')[0]}")
             except Exception as e:
                 self.log(f"❌ Connection Error: {str(e)}")
         else:
@@ -147,26 +157,26 @@ class TradeBot:
 
                     # --- STEP 3: EXECUTE TRADE ---
                     if should_buy:
-                        # 1. Calculate Quantity (~$15 USDT)
-                        # This ensures we meet minimum order requirements
-                        target_usdt_value = 15.0
-                        qty = target_usdt_value / current_price
+                        # 1. Use the User Defined Quantity
+                        qty = self.trade_qty
                         
-                        # 2. Smart Rounding
-                        if "BTC" in self.symbol: qty = round(qty, 3)
-                        elif "ETH" in self.symbol: qty = round(qty, 2)
-                        elif "XRP" in self.symbol or "DOGE" in self.symbol: qty = int(qty)
-                        else: qty = round(qty, 2)
+                        # 2. Smart Precision Handling (Avoids API errors)
+                        # Some coins like XRP/DOGE do not support decimals in Quantity
+                        if "XRP" in self.symbol or "DOGE" in self.symbol or "SHIB" in self.symbol:
+                            qty = int(qty)
+                        elif "BTC" in self.symbol or "ETH" in self.symbol:
+                            qty = round(qty, 3) # Max 3 decimals usually safe
+                        else:
+                            qty = round(qty, 2)
 
-                        self.log(f"⚡ SENDING BUY: {qty} {self.symbol} (~${target_usdt_value})")
+                        self.log(f"⚡ SENDING BUY: {qty} {self.symbol} (User Setting)")
                         
                         # 3. Place Order
                         order = self.broker.place_order(self.symbol, "buy", qty)
                         
-                        # 4. CRITICAL FIX: CHECK FOR FAILURE
-                        # We check if the response contains 'error' or status='error'
+                        # 4. Check for Success/Failure
                         if (isinstance(order, dict) and "error" in order) or (isinstance(order, dict) and order.get("status") == "error"):
-                            # Reveal the TRUE error message from the exchange
+                            # Reveal the TRUE error message
                             reason = order.get('message') or order.get('error') or "Unknown Reason"
                             self.log(f"❌ CRITICAL FAILURE: {reason}")
                         else:
@@ -212,7 +222,6 @@ async def start_bot(strategy_id: int, db: Session):
     strat = db.query(models.Strategy).filter(models.Strategy.id == strategy_id).first()
     strat.is_running = True
     db.commit()
-    
     return {"status": "success", "message": "Bot Started"}
 
 async def stop_bot(strategy_id: int, db: Session):
@@ -226,5 +235,4 @@ async def stop_bot(strategy_id: int, db: Session):
     strat = db.query(models.Strategy).filter(models.Strategy.id == strategy_id).first()
     strat.is_running = False
     db.commit()
-    
     return {"status": "success", "message": "Bot Stopped"}

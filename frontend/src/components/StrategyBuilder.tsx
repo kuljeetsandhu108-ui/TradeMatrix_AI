@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { X, Plus, Save, Trash2, PlayCircle, Activity, Loader2 } from "lucide-react";
+import { X, Plus, Save, Trash2, PlayCircle, Activity, Loader2, Coins } from "lucide-react";
 import { motion } from "framer-motion";
-import api from "../utils/api"; // <--- Using Secure API Helper
+import api from "../utils/api";
 
 // --- Types for Type Safety ---
 interface BuilderProps {
@@ -20,10 +20,14 @@ interface ConditionRow {
 export default function StrategyBuilder({ onClose }: BuilderProps) {
   // --- STATE MANAGEMENT ---
   const [name, setName] = useState("");
-  // Default to Crypto Pair
-  const [symbol, setSymbol] = useState("BTC/USDT"); 
+  const [symbol, setSymbol] = useState("BTC/USDT");
   const [timeframe, setTimeframe] = useState("5m");
-  const [isDeploying, setIsDeploying] = useState(false); // Loading state
+  
+  // --- NEW: USER DEFINED QUANTITY ---
+  // Defaulting to 0.001 (Safe for BTC)
+  const [quantity, setQuantity] = useState("0.001"); 
+  
+  const [isDeploying, setIsDeploying] = useState(false);
   
   // The Logic Matrix State
   const [conditions, setConditions] = useState<ConditionRow[]>([
@@ -46,36 +50,37 @@ export default function StrategyBuilder({ onClose }: BuilderProps) {
     setConditions(conditions.filter(c => c.id !== id));
   };
 
-  // 3. Update specific values in a row (The Logic Engine)
+  // 3. Update specific values in a row
   const updateCondition = (id: number, field: keyof ConditionRow, value: string) => {
     setConditions(conditions.map(c => 
       c.id === id ? { ...c, [field]: value } : c
     ));
   };
 
-  // 4. SAVE & DEPLOY TO BACKEND (Authenticated & Cloud Ready)
+  // 4. SAVE & DEPLOY
   const handleSave = async () => {
-    // Basic Validation
+    // Validation
     if (!name) return alert("Please give your strategy a name.");
-    
+    if (!quantity || parseFloat(quantity) <= 0) return alert("Please enter a valid trade quantity.");
+
     setIsDeploying(true);
 
     try {
-      // The Payload matching our Python Schema
+      // The Payload sent to Backend
       const payload = {
         name: name,
         symbol: symbol,
         timeframe: timeframe,
         conditions: conditions,
-        // user_id is extracted from the Token by the backend automatically
+        // Send quantity as a float number
+        quantity: parseFloat(quantity) 
       };
 
-      // --- SEND TO BACKEND ---
-      // Using 'api' helper handles Authentication and Cloud URL automatically
+      // Send to Backend
       const response = await api.post("/api/v1/strategy/create", payload);
 
       if (response.data.status === "success") {
-        onClose(); // Close the modal to trigger the dashboard refresh
+        onClose(); // Close modal on success
       }
 
     } catch (error) {
@@ -104,7 +109,7 @@ export default function StrategyBuilder({ onClose }: BuilderProps) {
             <h2 className="text-2xl font-bold text-white flex items-center gap-2">
               <Activity className="text-primary" /> Create Crypto Bot
             </h2>
-            <p className="text-gray-400 text-sm">Define 24/7 automated logic for crypto markets.</p>
+            <p className="text-gray-400 text-sm">Define logic and position sizing.</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition">
             <X size={24} />
@@ -115,22 +120,22 @@ export default function StrategyBuilder({ onClose }: BuilderProps) {
         <div className="p-8 overflow-y-auto flex-1 space-y-8 custom-scrollbar">
           
           {/* Section 1: Configuration */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             
-            {/* Name Input */}
-            <div className="space-y-2">
+            {/* Name */}
+            <div className="space-y-2 col-span-1">
               <label className="text-xs font-mono text-gray-500 uppercase tracking-wider">Strategy Name</label>
               <input 
                 type="text" 
-                placeholder="e.g. BTC Trend Follower" 
+                placeholder="e.g. BTC Moon" 
                 className="w-full bg-[#050505] border border-[#2A2A2A] rounded-lg p-3 text-white focus:border-primary focus:outline-none transition placeholder:text-gray-700 font-medium"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
             </div>
 
-            {/* Instrument Select (UPDATED FOR CRYPTO) */}
-            <div className="space-y-2">
+            {/* Asset */}
+            <div className="space-y-2 col-span-1">
               <label className="text-xs font-mono text-gray-500 uppercase tracking-wider">Asset Pair</label>
               <select 
                 value={symbol}
@@ -146,23 +151,38 @@ export default function StrategyBuilder({ onClose }: BuilderProps) {
               </select>
             </div>
 
-            {/* Timeframe Select */}
-            <div className="space-y-2">
+            {/* Timeframe */}
+            <div className="space-y-2 col-span-1">
               <label className="text-xs font-mono text-gray-500 uppercase tracking-wider">Timeframe</label>
-              <div className="flex bg-[#050505] rounded-lg border border-[#2A2A2A] p-1">
-                {["1m", "5m", "15m", "1H", "4H"].map((tf) => (
-                  <button 
-                    key={tf}
-                    onClick={() => setTimeframe(tf)}
-                    className={`flex-1 py-2 text-sm font-medium rounded-md transition ${
-                      timeframe === tf ? "bg-[#2A2A2A] text-white shadow-sm border border-gray-700" : "text-gray-500 hover:text-gray-300"
-                    }`}
-                  >
-                    {tf}
-                  </button>
-                ))}
+              <select 
+                value={timeframe} 
+                onChange={(e) => setTimeframe(e.target.value)} 
+                className="w-full bg-[#050505] border border-[#2A2A2A] rounded-lg p-3 text-white focus:border-primary focus:outline-none appearance-none font-mono"
+              >
+                <option value="1m">1 Minute</option>
+                <option value="5m">5 Minutes</option>
+                <option value="15m">15 Minutes</option>
+                <option value="1H">1 Hour</option>
+                <option value="4H">4 Hour</option>
+              </select>
+            </div>
+            
+            {/* --- NEW QUANTITY INPUT --- */}
+            <div className="space-y-2 col-span-1">
+              <label className="text-xs font-mono text-primary uppercase tracking-wider font-bold">Trade Size</label>
+              <div className="relative">
+                <input 
+                  type="number" 
+                  step="0.001"
+                  placeholder="0.001" 
+                  className="w-full bg-[#050505] border border-primary/50 rounded-lg p-3 text-white focus:border-primary focus:outline-none transition font-mono font-bold"
+                  value={quantity} 
+                  onChange={(e) => setQuantity(e.target.value)} 
+                />
+                <Coins className="absolute right-3 top-3 text-gray-500" size={16} />
               </div>
             </div>
+
           </div>
 
           {/* Section 2: The Logic Engine */}
@@ -198,7 +218,7 @@ export default function StrategyBuilder({ onClose }: BuilderProps) {
                     <option value="OPEN">Open Price</option>
                   </select>
 
-                  {/* Left Param (Value) */}
+                  {/* Left Param */}
                   <input 
                     type="number" 
                     value={cond.paramA} 
@@ -231,7 +251,7 @@ export default function StrategyBuilder({ onClose }: BuilderProps) {
                     <option value="VALUE">Number Value</option>
                   </select>
 
-                  {/* Right Param (Value) */}
+                  {/* Right Param */}
                   <input 
                     type="number" 
                     value={cond.paramB} 

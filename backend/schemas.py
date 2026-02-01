@@ -1,7 +1,8 @@
 from pydantic import BaseModel
 from typing import List, Optional, Any
 
-# This defines one single condition row (e.g. EMA 9 > EMA 21)
+# --- SHARED MODELS ---
+
 class Condition(BaseModel):
     id: int
     indicatorA: str
@@ -10,17 +11,30 @@ class Condition(BaseModel):
     indicatorB: str
     paramB: str
 
-# This defines the full package sent from the Frontend
+# --- INPUT MODELS (Data coming FROM Frontend) ---
+
 class StrategyCreate(BaseModel):
-    name: str          # "Ayush 1"
-    symbol: str        # "NIFTY 50"
-    timeframe: str     # "5m"
-    conditions: List[Condition] # The list of rules
-    user_id: Optional[int] = 1  # We will use User 1 for now (Hardcoded until Login is ready)
+    name: str
+    symbol: str
+    timeframe: str
+    conditions: List[Condition]
+    # NEW: The Trade Quantity (e.g. 0.001 for BTC, 10 for XRP)
+    quantity: float = 0.001 
+    user_id: Optional[int] = None # Optional because we get it from the Token now
 
-# ... (Keep existing classes) ...
+class BrokerConnectRequest(BaseModel):
+    broker_name: str
+    client_id: str
+    api_key: str
+    user_id: int = 1 # Legacy support, will be overwritten by Token ID
 
-# Add this NEW class at the bottom
+class GoogleLoginRequest(BaseModel):
+    token: str
+
+# --- OUTPUT MODELS (Data sent TO Frontend) ---
+
 class StrategyResponse(StrategyCreate):
     id: int
     is_running: bool
+    # We explicitly include quantity here to ensure it's sent back
+    quantity: float
