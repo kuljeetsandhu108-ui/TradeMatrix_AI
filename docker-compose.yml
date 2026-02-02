@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  # 1. THE VAULT (Database)
+  db:
+    image: postgres:15
+    restart: always
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: tradematrix
+
+  # 2. THE BRAIN (Backend)
+  backend:
+    build: ./backend
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://user:password@db:5432/tradematrix
+      GOOGLE_CLIENT_ID: "YOUR_GOOGLE_CLIENT_ID_HERE" # <--- PASTE YOUR ID
+      RAILWAY_PUBLIC_DOMAIN: "" # Leave empty on VPS
+    depends_on:
+      - db
+
+  # 3. THE FACE (Frontend)
+  frontend:
+    build: ./frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      # In Docker, we use the Public IP of the VPS
+      NEXT_PUBLIC_API_URL: http://YOUR_VPS_IP_HERE:8000
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
